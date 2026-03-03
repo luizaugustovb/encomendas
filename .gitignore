@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.next/
+.turbo/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Uploads (user-generated content)
+apps/api/uploads/deliveries/*
+apps/api/uploads/photos/*
+apps/api/uploads/withdrawals/*
+!apps/api/uploads/deliveries/.gitkeep
+!apps/api/uploads/photos/.gitkeep
+!apps/api/uploads/withdrawals/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+apps/api/prisma/migrations/
+
+# Misc
+*.tsbuildinfo
+api.log
+api-err.log

@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id         String        @id @default(uuid())
+  name       String
+  document   String?
+  address    String?
+  phone      String?
+  active     Boolean       @default(true)
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  deliveries Delivery[]
+  locations  Location[]
+  config     TenantConfig?
+  units      Unit[]
+  users      User[]
+
+  @@map("tenants")
+}
+
+model TenantConfig {
+  id                String   @id @default(uuid())
+  tenantId          String   @unique @map("tenant_id")
+  whatsappToken     String?  @map("whatsapp_token")
+  hikvisionIp       String?  @map("hikvision_ip")
+  hikvisionPort     Int?     @default(80) @map("hikvision_port")
+  hikvisionUser     String?  @map("hikvision_user")
+  hikvisionPassword String?  @map("hikvision_password")
+  hikvisionEnabled  Boolean  @default(false) @map("hikvision_enabled")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("tenant_configs")
+}
+
+model User {
+  id                  String          @id @default(uuid())
+  tenantId            String          @map("tenant_id")
+  name                String
+  email               String          @unique
+  password            String
+  phone               String?
+  role                Role            @default(MORADOR)
+  unitId              String?         @map("unit_id")
+  photoUrl            String?         @map("photo_url")
+  active              Boolean         @default(true)
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  hikvisionEmployeeNo String?         @map("hikvision_employee_no")
+  hikvisionSynced     Boolean         @default(false) @map("hikvision_synced")
+  deliveriesReceived  Delivery[]      @relation("ReceivedBy")
+  deliveriesOwned     Delivery[]      @relation("DeliveryOwner")
+  deliveryEvents      DeliveryEvent[]
+  tenant              Tenant          @relation(fields: [tenantId], references: [id])
+  unit                Unit?           @relation(fields: [unitId], references: [id])
+
+  @@map("users")
+}
+
+model Unit {
+  id         String     @id @default(uuid())
+  tenantId   String     @map("tenant_id")
+  number     String
+  block      String?
+  type       String     @default("APARTAMENTO")
+  active     Boolean    @default(true)
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+  deliveries Delivery[]
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  users      User[]
+
+  @@unique([tenantId, number, block])
+  @@map("units")
+}
+
+model Location {
+  id          String     @id @default(uuid())
+  tenantId    String     @map("tenant_id")
+  code        String
+  description String?
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deliveries  Delivery[]
+  tenant      Tenant     @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, code])
+  @@map("locations")
+}
+
+model Delivery {
+  id               String          @id @default(uuid())
+  tenantId         String          @map("tenant_id")
+  code             String          @unique
+  qrcode           String
+  status           DeliveryStatus  @default(PENDING)
+  userId           String          @map("user_id")
+  unitId           String          @map("unit_id")
+  locationId       String          @map("location_id")
+  receivedById     String          @map("received_by_id")
+  description      String?
+  withdrawnAt      DateTime?       @map("withdrawn_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  photoUrl         String?         @map("photo_url")
+  withdrawPhotoUrl String?         @map("withdraw_photo_url")
+  location         Location        @relation(fields: [locationId], references: [id])
+  receivedBy       User            @relation("ReceivedBy", fields: [receivedById], references: [id])
+  tenant           Tenant          @relation(fields: [tenantId], references: [id])
+  unit             Unit            @relation(fields: [unitId], references: [id])
+  user             User            @relation("DeliveryOwner", fields: [userId], references: [id])
+  events           DeliveryEvent[]
+
+  @@map("deliveries")
+}
+
+model DeliveryEvent {
+  id         String    @id @default(uuid())
+  deliveryId String    @map("delivery_id")
+  userId     String?   @map("user_id")
+  type       EventType
+  metadata   String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  delivery   Delivery  @relation(fields: [deliveryId], references: [id])
+  user       User?     @relation(fields: [userId], references: [id])
+
+  @@map("delivery_events")
+}
+
+enum Role {
+  ADMIN
+  ADMIN_CONDOMINIO
+  PORTEIRO
+  ZELADOR
+  MORADOR
+}
+
+enum DeliveryStatus {
+  PENDING
+  WITHDRAWN
+}
+
+enum EventType {
+  CREATED
+  WHATSAPP_SENT
+  WITHDRAWN
+  DOOR_ACCESS
+}
