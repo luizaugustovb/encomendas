@@ -153,7 +153,7 @@ export default function UsersPage() {
         name: formName,
         email: formEmail,
         password: formPassword,
-        phone: formPhone || undefined,
+        phone: formPhone ? `55${formPhone}` : undefined,
         role: formRole,
         unitId: formUnitId || undefined,
       };
@@ -188,7 +188,7 @@ export default function UsersPage() {
       const data: any = {
         name: editName,
         email: editEmail,
-        phone: editPhone,
+        phone: editPhone ? `55${editPhone}` : editPhone,
         role: editRole,
         unitId: editUnitId || null,
       };
@@ -217,7 +217,7 @@ export default function UsersPage() {
     setEditName(user.name);
     setEditEmail(user.email);
     setEditPassword("");
-    setEditPhone(user.phone || "");
+    setEditPhone(user.phone ? user.phone.replace(/^55/, '') : "");
     setEditRole(user.role);
     setEditUnitId(user.unitId || "");
     setEditPhoto(null);
@@ -380,7 +380,10 @@ export default function UsersPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Telefone (WhatsApp)</Label>
-                  <Input placeholder="5511999990000" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">+55</span>
+                    <Input className="rounded-l-none" placeholder="84999990000" value={formPhone} onChange={(e) => setFormPhone(e.target.value.replace(/\D/g, ''))} />
+                  </div>
                 </div>
               </div>
 
@@ -529,7 +532,10 @@ export default function UsersPage() {
               </div>
               <div className="space-y-2">
                 <Label>Telefone (WhatsApp)</Label>
-                <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+                <div className="flex">
+                  <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">+55</span>
+                  <Input className="rounded-l-none" placeholder="84999990000" value={editPhone} onChange={(e) => setEditPhone(e.target.value.replace(/\D/g, ''))} />
+                </div>
               </div>
             </div>
 

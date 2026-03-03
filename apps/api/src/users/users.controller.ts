@@ -62,10 +62,14 @@ export class UsersController {
     const finalTenantId = user.role === 'ADMIN' && dto.tenantId ? dto.tenantId : tenantId;
     const created = await this.usersService.create({ ...dto, tenantId: finalTenantId });
 
-    // Sincroniza automaticamente com o equipamento Hikvision (em background)
-    this.hikvisionService.syncSingleUser(finalTenantId, created.id).catch((err) => {
-      this.logger.warn(`[Hikvision] Falha ao sincronizar usuário ${created.name}: ${err.message}`);
-    });
+    // Sincroniza automaticamente com o equipamento Hikvision APENAS se NÃO for morador
+    // Moradores só são sincronizados quando recebem encomenda
+    const staffRoles = ['ADMIN', 'ADMIN_CONDOMINIO', 'PORTEIRO', 'ZELADOR'];
+    if (staffRoles.includes(created.role)) {
+      this.hikvisionService.syncSingleUser(finalTenantId, created.id).catch((err) => {
+        this.logger.warn(`[Hikvision] Falha ao sincronizar usuário ${created.name}: ${err.message}`);
+      });
+    }
 
     return created;
   }
@@ -79,10 +83,14 @@ export class UsersController {
     @CurrentUser() user: any,
   ) {
     return this.usersService.update(id, tenantId, dto, user.role).then((updated) => {
-      // Sincroniza atualização no dispositivo Hikvision (com o tenantId real do usuário)
-      this.hikvisionService.syncSingleUser(updated.tenantId, id).catch((err) => {
-        this.logger.warn(`[Hikvision] Falha ao sincronizar atualização do usuário: ${err.message}`);
-      });
+      // Sincroniza atualização no dispositivo Hikvision apenas para staff
+      // Moradores só são sincronizados via fluxo de encomendas
+      const staffRoles = ['ADMIN', 'ADMIN_CONDOMINIO', 'PORTEIRO', 'ZELADOR'];
+      if (staffRoles.includes(updated.role)) {
+        this.hikvisionService.syncSingleUser(updated.tenantId, id).catch((err) => {
+          this.logger.warn(`[Hikvision] Falha ao sincronizar atualização do usuário: ${err.message}`);
+        });
+      }
       return updated;
     });
   }
@@ -105,10 +113,13 @@ export class UsersController {
   async reactivate(@Param('id') id: string, @TenantId() tenantId: string, @CurrentUser() user: any) {
     const reactivated = await this.usersService.reactivate(id, tenantId, user.role);
 
-    // Sincroniza novamente com o equipamento Hikvision ao reativar
-    this.hikvisionService.syncSingleUser(tenantId, id).catch((err) => {
-      this.logger.warn(`[Hikvision] Falha ao re-sincronizar usuário reativado: ${err.message}`);
-    });
+    // Sincroniza novamente com o equipamento Hikvision ao reativar, só para staff
+    const staffRoles = ['ADMIN', 'ADMIN_CONDOMINIO', 'PORTEIRO', 'ZELADOR'];
+    if (staffRoles.includes(reactivated.role)) {
+      this.hikvisionService.syncSingleUser(reactivated.tenantId, id).catch((err) => {
+        this.logger.warn(`[Hikvision] Falha ao re-sincronizar usuário reativado: ${err.message}`);
+      });
+    }
 
     return reactivated;
   }
@@ -155,10 +166,14 @@ export class UsersController {
     const photoUrl = `/uploads/photos/${file.filename}`;
     const updated = await this.usersService.updatePhoto(id, photoUrl);
 
-    // Sincroniza automaticamente a foto com o equipamento Hikvision usando o tenantId do usuário
-    this.hikvisionService.syncSingleUser(updated.tenantId, id).catch((err) => {
-      this.logger.warn(`[Hikvision] Falha ao sincronizar foto do usuário: ${err.message}`);
-    });
+    // Sincroniza foto no dispositivo Hikvision apenas para staff
+    // Moradores terão foto sincronizada quando receberem encomenda
+    const staffRoles = ['ADMIN', 'ADMIN_CONDOMINIO', 'PORTEIRO', 'ZELADOR'];
+    if (staffRoles.includes(updated.role)) {
+      this.hikvisionService.syncSingleUser(updated.tenantId, id).catch((err) => {
+        this.logger.warn(`[Hikvision] Falha ao sincronizar foto do usuário: ${err.message}`);
+      });
+    }
 
     return updated;
   }

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, Logger } from '@nes
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { TenantConfigService } from '../tenant-config/tenant-config.service';
+import { HikvisionService } from '../hikvision/hikvision.service';
 import { v4 as uuidv4 } from 'uuid';
 import * as QRCode from 'qrcode';
 import PDFDocument from 'pdfkit';
@@ -14,6 +15,7 @@ export class DeliveriesService {
     private prisma: PrismaService,
     private whatsappService: WhatsappService,
     private tenantConfigService: TenantConfigService,
+    private hikvisionService: HikvisionService,
   ) {}
 
   async findAll(tenantId: string, role?: string) {
@@ -53,14 +55,47 @@ export class DeliveriesService {
     description?: string;
     photoUrl?: string;
   }) {
-    // Auto-derive unitId from user if not provided
+    // Busca o morador completo para derivar unitId e tenantId
+    const morador = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { unitId: true, tenantId: true },
+    });
+    if (!morador) {
+      throw new BadRequestException('Morador não encontrado');
+    }
+
+    // Auto-derive unitId from morador if not provided
     let unitId = data.unitId;
     if (!unitId) {
-      const user = await this.prisma.user.findUnique({ where: { id: data.userId }, select: { unitId: true } });
-      if (!user || !user.unitId) {
+      if (!morador.unitId) {
         throw new BadRequestException('Morador não possui unidade vinculada');
       }
-      unitId = user.unitId;
+      unitId = morador.unitId;
+    }
+
+    // Sempre usa o tenantId do morador (evita que admin master crie delivery no tenant errado)
+    const tenantId = morador.tenantId;
+
+    // Verifica se o receivedById existe. Se não existir (ex: token JWT expirado/usuário recriado),
+    // utiliza o primeiro porteiro ativo do tenant como fallback
+    let receivedById = data.receivedById;
+    const receiverExists = await this.prisma.user.findUnique({
+      where: { id: receivedById },
+      select: { id: true },
+    });
+    if (!receiverExists) {
+      this.logger.warn(`[Delivery] receivedById ${receivedById} não encontrado. Buscando porteiro do tenant...`);
+      const fallbackUser = await this.prisma.user.findFirst({
+        where: { tenantId, active: true, role: { in: ['PORTEIRO', 'ADMIN_CONDOMINIO', 'ADMIN'] } },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (fallbackUser) {
+        receivedById = fallbackUser.id;
+        this.logger.log(`[Delivery] Usando fallback receivedById: ${receivedById}`);
+      } else {
+        throw new BadRequestException('Nenhum responsável encontrado para registrar a encomenda. Faça login novamente.');
+      }
     }
 
     const code = `ENC-${Date.now().toString(36).toUpperCase()}-${uuidv4().slice(0, 4).toUpperCase()}`;
@@ -68,11 +103,11 @@ export class DeliveriesService {
 
     const delivery = await this.prisma.delivery.create({
       data: {
-        tenantId: data.tenantId,
+        tenantId,
         userId: data.userId,
         unitId,
         locationId: data.locationId,
-        receivedById: data.receivedById,
+        receivedById,
         description: data.description,
         photoUrl: data.photoUrl,
         code,
@@ -91,7 +126,7 @@ export class DeliveriesService {
     await this.prisma.deliveryEvent.create({
       data: {
         deliveryId: delivery.id,
-        userId: data.receivedById,
+        userId: receivedById,
         type: 'CREATED',
         metadata: JSON.stringify({ code }),
       },
@@ -100,23 +135,33 @@ export class DeliveriesService {
     // Envio automático via WhatsApp (com token do tenant)
     if (delivery.user.phone) {
       try {
-        const whatsappToken = await this.tenantConfigService.getWhatsappToken(data.tenantId);
+        const whatsappToken = await this.tenantConfigService.getWhatsappToken(tenantId);
         const unitLabel = delivery.unit.block
           ? `${delivery.unit.type} ${delivery.unit.number}, Bloco ${delivery.unit.block}`
           : `${delivery.unit.type} ${delivery.unit.number}`;
 
-        const message = `📦 *Encomenda Recebida!*\n\nOlá ${delivery.user.name},\nSua encomenda chegou!\n\n📍 Localização: ${delivery.location.code}\n🏠 Unidade: ${unitLabel}\n🔑 Código: ${code}\n\nRetire na portaria apresentando o QR Code.`;
+        const message = `📦 *Encomenda Recebida!*\n\nOlá ${delivery.user.name},\nSua encomenda chegou!\n\n📍 Localização: ${delivery.location.code}\n🏠 Unidade: ${unitLabel}\n🔑 Código: ${code}\n\nDirija-se à sala de encomendas para retirar sua encomenda.`;
 
-        // Se tem foto do produto, envia com mídia
-        if (data.photoUrl) {
-          const baseUrl = process.env.APP_URL || 'http://localhost:3001';
-          await this.whatsappService.sendMediaWithToken(
-            delivery.user.phone,
-            message,
-            `${baseUrl}${data.photoUrl}`,
-            whatsappToken,
-          );
+        // Se tem foto e APP_URL público, envia com mídia; senão envia texto
+        const baseUrl = process.env.APP_URL || '';
+        const isPublicUrl = baseUrl && !baseUrl.includes('localhost') && !baseUrl.includes('127.0.0.1');
+
+        if (data.photoUrl && isPublicUrl) {
+          try {
+            await this.whatsappService.sendMediaWithToken(
+              delivery.user.phone,
+              message,
+              `${baseUrl}${data.photoUrl}`,
+              whatsappToken,
+            );
+          } catch (mediaError) {
+            this.logger.warn(`Falha ao enviar mídia WhatsApp, tentando texto: ${mediaError.message}`);
+            await this.whatsappService.sendMessageWithToken(delivery.user.phone, message, whatsappToken);
+          }
         } else {
+          if (data.photoUrl && !isPublicUrl) {
+            this.logger.warn(`APP_URL não é público (${baseUrl || 'não definido'}). Enviando WhatsApp somente texto.`);
+          }
           await this.whatsappService.sendMessageWithToken(delivery.user.phone, message, whatsappToken);
         }
 
@@ -132,6 +177,12 @@ export class DeliveriesService {
         this.logger.error(`Erro ao enviar WhatsApp automaticamente: ${error.message}`);
       }
     }
+
+    // Sincroniza moradores da unidade com o equipamento Hikvision
+    // (moradores só são cadastrados no equipamento quando recebem encomenda)
+    this.hikvisionService.syncUnitResidents(tenantId, unitId).catch((err) => {
+      this.logger.warn(`[Hikvision] Falha ao sincronizar moradores da unidade: ${err.message}`);
+    });
 
     return delivery;
   }
@@ -194,6 +245,11 @@ export class DeliveriesService {
         this.logger.error(`Erro ao enviar WhatsApp de retirada: ${error.message}`);
       }
     }
+
+    // Remove moradores da unidade do equipamento Hikvision se não houver mais encomendas pendentes
+    this.hikvisionService.unsyncUnitResidentsIfNoPending(delivery.tenantId, delivery.unitId).catch((err) => {
+      this.logger.warn(`[Hikvision] Falha ao remover moradores do equipamento após retirada: ${err.message}`);
+    });
 
     return updated;
   }
@@ -398,6 +454,11 @@ export class DeliveriesService {
         this.logger.error(`Erro ao enviar WhatsApp de retirada (totem): ${error.message}`);
       }
     }
+
+    // Remove moradores da unidade do equipamento Hikvision se não houver mais encomendas pendentes
+    this.hikvisionService.unsyncUnitResidentsIfNoPending(delivery.tenantId, delivery.unitId).catch((err) => {
+      this.logger.warn(`[Hikvision] Falha ao remover moradores do equipamento após retirada (totem): ${err.message}`);
+    });
 
     return updated;
   }

@@ -1072,6 +1072,144 @@ export class HikvisionService implements OnModuleInit {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  // 8.5 SINCRONIZAÇÃO DE MORADORES POR UNIDADE (FLUXO DE ENCOMENDAS)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Sincroniza todos os moradores ativos de uma unidade com o equipamento.
+   * Chamado quando uma encomenda é cadastrada para a unidade.
+   */
+  async syncUnitResidents(
+    tenantId: string,
+    unitId: string,
+  ): Promise<{ synced: number; failed: number; errors: string[] }> {
+    const config = await this.getConfigOrFail(tenantId);
+    const residents = await this.prisma.user.findMany({
+      where: { tenantId, unitId, role: 'MORADOR', active: true },
+    });
+
+    const result = { synced: 0, failed: 0, errors: [] as string[] };
+
+    for (const resident of residents) {
+      // Pula se já está sincronizado no equipamento
+      if (resident.hikvisionSynced) {
+        this.logger.log(`[SyncUnit] Morador ${resident.name} já sincronizado, pulando`);
+        result.synced++;
+        continue;
+      }
+
+      try {
+        let employeeNo = resident.hikvisionEmployeeNo;
+        if (!employeeNo) {
+          employeeNo = await this.generateEmployeeNo(tenantId);
+          await this.prisma.user.update({
+            where: { id: resident.id },
+            data: { hikvisionEmployeeNo: employeeNo },
+          });
+        }
+
+        // Cria usuário no dispositivo
+        const createResult = await this.createDeviceUser(config, {
+          employeeNo,
+          name: resident.name,
+        });
+
+        if (!createResult.success) {
+          result.failed++;
+          result.errors.push(`${resident.name}: ${createResult.error}`);
+          continue;
+        }
+
+        // Delay para o dispositivo processar
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        // Envia foto facial se tiver
+        if (resident.photoUrl) {
+          const photoFullPath = path.join(
+            process.cwd(), resident.photoUrl.replace(/^\//, ''),
+          );
+          if (fs.existsSync(photoFullPath)) {
+            const faceResult = await this.uploadFacePhoto(config, employeeNo, photoFullPath);
+            if (!faceResult.success) {
+              this.logger.warn(`[SyncUnit] Face de ${resident.name} falhou: ${faceResult.error}`);
+            }
+          }
+        }
+
+        // Marca como sincronizado
+        await this.prisma.user.update({
+          where: { id: resident.id },
+          data: { hikvisionSynced: true },
+        });
+
+        result.synced++;
+        this.logger.log(`[SyncUnit] Morador ${resident.name} sincronizado (employeeNo: ${employeeNo})`);
+      } catch (error) {
+        result.failed++;
+        result.errors.push(`${resident.name}: ${error.message}`);
+      }
+    }
+
+    this.logger.log(
+      `[SyncUnit] Unidade ${unitId}: ${result.synced} sincronizados, ${result.failed} falhas`,
+    );
+    return result;
+  }
+
+  /**
+   * Remove moradores de uma unidade do equipamento SE não houver mais
+   * encomendas pendentes para a unidade.
+   * Chamado quando uma encomenda é retirada.
+   */
+  async unsyncUnitResidentsIfNoPending(
+    tenantId: string,
+    unitId: string,
+  ): Promise<{ removed: number; kept: number; reason?: string }> {
+    // Verifica se a unidade ainda tem encomendas pendentes
+    const pendingCount = await this.prisma.delivery.count({
+      where: { tenantId, unitId, status: 'PENDING' },
+    });
+
+    if (pendingCount > 0) {
+      this.logger.log(
+        `[UnsyncUnit] Unidade ${unitId} ainda tem ${pendingCount} encomenda(s) pendente(s). Mantendo moradores no equipamento.`,
+      );
+      return { removed: 0, kept: pendingCount, reason: `${pendingCount} encomendas pendentes` };
+    }
+
+    // Não há mais pendentes → remove todos os moradores da unidade do equipamento
+    const config = await this.getConfigOrFail(tenantId);
+    const residents = await this.prisma.user.findMany({
+      where: { tenantId, unitId, role: 'MORADOR', hikvisionSynced: true },
+    });
+
+    let removed = 0;
+    for (const resident of residents) {
+      if (!resident.hikvisionEmployeeNo) continue;
+
+      try {
+        await this.deleteDeviceUser(config, resident.hikvisionEmployeeNo);
+        await this.deleteFacePhoto(config, resident.hikvisionEmployeeNo);
+
+        await this.prisma.user.update({
+          where: { id: resident.id },
+          data: { hikvisionSynced: false },
+        });
+
+        removed++;
+        this.logger.log(`[UnsyncUnit] Morador ${resident.name} removido do equipamento`);
+      } catch (error) {
+        this.logger.error(`[UnsyncUnit] Erro ao remover ${resident.name}: ${error.message}`);
+      }
+    }
+
+    this.logger.log(
+      `[UnsyncUnit] Unidade ${unitId}: ${removed} moradores removidos do equipamento`,
+    );
+    return { removed, kept: 0 };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   // 9. AUTORIZAÇÃO DE ACESSO (verificar encomendas pendentes)
   // ═══════════════════════════════════════════════════════════════════════
 
