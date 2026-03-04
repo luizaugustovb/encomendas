@@ -24,12 +24,21 @@ export class TenantConfigService {
     hikvisionUser?: string;
     hikvisionPassword?: string;
     hikvisionEnabled?: boolean;
+    rtspCameraUrl?: string;
   }) {
     return this.prisma.tenantConfig.upsert({
       where: { tenantId },
       update: data,
       create: { tenantId, ...data },
     });
+  }
+
+  async getRtspCameraUrl(tenantId: string): Promise<string | null> {
+    const config = await this.prisma.tenantConfig.findUnique({
+      where: { tenantId },
+      select: { rtspCameraUrl: true },
+    });
+    return config?.rtspCameraUrl || null;
   }
 
   async getWhatsappToken(tenantId: string): Promise<string> {

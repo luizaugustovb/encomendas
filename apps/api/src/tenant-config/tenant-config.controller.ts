@@ -17,6 +17,7 @@ export class UpdateTenantConfigDto {
   @IsOptional() @IsString() hikvisionUser?: string;
   @IsOptional() @IsString() hikvisionPassword?: string;
   @IsOptional() @IsBoolean() hikvisionEnabled?: boolean;
+  @IsOptional() @IsString() rtspCameraUrl?: string;
 }
 
 @Controller('tenant-config')

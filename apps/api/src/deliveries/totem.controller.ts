@@ -7,6 +7,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { DeliveriesService } from './deliveries.service';
+import { TenantConfigService } from '../tenant-config/tenant-config.service';
 import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 
 export class TotemWithdrawDto {
@@ -20,7 +21,19 @@ export class TotemWithdrawDto {
  */
 @Controller('totem')
 export class TotemController {
-  constructor(private deliveriesService: DeliveriesService) {}
+  constructor(
+    private deliveriesService: DeliveriesService,
+    private tenantConfigService: TenantConfigService,
+  ) {}
+
+  /**
+   * Retorna a URL da câmera RTSP configurada para o condomínio (público)
+   */
+  @Get('config/:tenantId/rtsp')
+  async getRtspConfig(@Param('tenantId') tenantId: string) {
+    const rtspCameraUrl = await this.tenantConfigService.getRtspCameraUrl(tenantId);
+    return { rtspCameraUrl };
+  }
 
   /**
    * Busca encomenda por código (QR ou manual)

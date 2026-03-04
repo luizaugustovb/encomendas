@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import {
-  Settings, Wifi, Camera, Save, TestTube2, Phone, Loader2, CheckCircle, XCircle,
+  Settings, Wifi, Camera, Save, TestTube2, Phone, Loader2, CheckCircle, XCircle, Video,
 } from "lucide-react";
 
 interface TenantConfig {
@@ -16,6 +16,7 @@ interface TenantConfig {
   hikvisionUser?: string;
   hikvisionPassword?: string;
   hikvisionEnabled?: boolean;
+  rtspCameraUrl?: string;
 }
 
 export default function SettingsPage() {
@@ -73,6 +74,7 @@ export default function SettingsPage() {
           hikvisionUser: config.hikvisionUser || null,
           hikvisionPassword: config.hikvisionPassword || null,
           hikvisionEnabled: config.hikvisionEnabled || false,
+          rtspCameraUrl: config.rtspCameraUrl || null,
         },
         token,
         isAdmin ? selectedTenantId || undefined : undefined,
@@ -304,6 +306,28 @@ export default function SettingsPage() {
               </button>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* RTSP Camera */}
+      <div className="rounded-lg border bg-card p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Video className="h-5 w-5 text-purple-600" />
+          <h2 className="text-lg font-semibold">Câmera RTSP (Totem)</h2>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">
+          URL da câmera para exibição no totem de retirada de encomendas. Se configurado, o totem exibirá a seção &quot;Ambiente Monitorado&quot; com o feed da câmera.
+          Utilize uma URL HTTP/MJPEG acessível pelo navegador (ex: http://192.168.1.100/ISAPI/Streaming/channels/101/httpPreview).
+        </p>
+        <div>
+          <label className="mb-1 block text-sm font-medium">URL da Câmera</label>
+          <input
+            type="text"
+            className="w-full rounded-md border px-3 py-2"
+            placeholder="http://192.168.1.100/ISAPI/Streaming/channels/101/httpPreview"
+            value={config.rtspCameraUrl || ""}
+            onChange={(e) => setConfig({ ...config, rtspCameraUrl: e.target.value })}
+          />
         </div>
       </div>
 

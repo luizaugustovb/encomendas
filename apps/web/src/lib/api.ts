@@ -171,13 +171,21 @@ export const api = {
   },
 
   // Audit Logs
-  getAuditLogs: (token: string, filters?: { deliveryId?: string; type?: string; from?: string; to?: string }) => {
+  getAuditLogs: (token: string, filters?: { deliveryId?: string; type?: string; from?: string; to?: string; unitId?: string }) => {
     const params = new URLSearchParams();
     if (filters?.deliveryId) params.append('deliveryId', filters.deliveryId);
     if (filters?.type) params.append('type', filters.type);
     if (filters?.from) params.append('from', filters.from);
     if (filters?.to) params.append('to', filters.to);
+    if (filters?.unitId) params.append('unitId', filters.unitId);
     const qs = params.toString();
     return fetchApi(`/deliveries/audit/logs${qs ? `?${qs}` : ''}`, { token });
   },
+
+  // Totem RTSP Config (público)
+  totemGetRtspConfig: (tenantId: string) =>
+    fetch(`/totem-api/config/${encodeURIComponent(tenantId)}/rtsp`).then(async (r) => {
+      if (!r.ok) return { rtspCameraUrl: null };
+      return r.json();
+    }),
 };

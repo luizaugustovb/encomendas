@@ -52,8 +52,9 @@ export class DeliveriesController {
     @Query('type') type?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('unitId') unitId?: string,
   ) {
-    return this.deliveriesService.getAuditLogs(tenantId, user.role, { deliveryId, type, from, to });
+    return this.deliveriesService.getAuditLogs(tenantId, user.role, { deliveryId, type, from, to, unitId });
   }
 
   @Get(':id')

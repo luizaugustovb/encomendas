@@ -556,7 +556,7 @@ export class DeliveriesService {
   /**
    * Audit logs - retorna eventos detalhados de todas as encomendas (somente ADMIN/ADMIN_CONDOMINIO)
    */
-  async getAuditLogs(tenantId: string, role: string, filters?: { deliveryId?: string; type?: string; from?: string; to?: string }) {
+  async getAuditLogs(tenantId: string, role: string, filters?: { deliveryId?: string; type?: string; from?: string; to?: string; unitId?: string }) {
     const isAdmin = role === 'ADMIN';
     const where: any = {};
 
@@ -566,6 +566,13 @@ export class DeliveriesService {
 
     if (filters?.deliveryId) {
       where.deliveryId = filters.deliveryId;
+    }
+    if (filters?.unitId) {
+      if (where.delivery) {
+        where.delivery.unitId = filters.unitId;
+      } else {
+        where.delivery = { unitId: filters.unitId };
+      }
     }
     if (filters?.type) {
       where.type = filters.type;
@@ -587,7 +594,7 @@ export class DeliveriesService {
             photoUrl: true,
             withdrawPhotoUrl: true,
             user: { select: { id: true, name: true, photoUrl: true } },
-            unit: { select: { number: true, block: true, type: true } },
+            unit: { select: { id: true, number: true, block: true, type: true } },
             withdrawnBy: { select: { id: true, name: true, photoUrl: true } },
           },
         },

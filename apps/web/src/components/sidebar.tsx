@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -20,18 +21,19 @@ import {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
   { href: "/dashboard/deliveries", label: "Encomendas", icon: Package, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
-  { href: "/dashboard/audit", label: "Logs de Auditoria", icon: FileSearch, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/users", label: "Usuários", icon: Users, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/units", label: "Unidades", icon: Building2, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/locations", label: "Localizações", icon: MapPin, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/tenants", label: "Condomínios", icon: Shield, roles: ["ADMIN"] },
   { href: "/dashboard/settings", label: "Configurações", icon: Settings, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/totem", label: "Totem", icon: Monitor, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO"] },
+  { href: "/dashboard/audit", label: "Logs de Auditoria", icon: FileSearch, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const [logoError, setLogoError] = useState(false);
 
   const filteredNav = navItems.filter(
     (item) => user && item.roles.includes(user.role)
@@ -40,9 +42,15 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2 border-b px-6">
-        <Package className="h-6 w-6 text-primary" />
-        <span className="text-lg font-bold">Encomendas</span>
+      <div className="flex h-16 items-center justify-center border-b px-6">
+        {!logoError ? (
+          <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" onError={() => setLogoError(true)} />
+        ) : (
+          <div className="flex items-center gap-2">
+            <Package className="h-6 w-6 text-primary" />
+            <span className="text-lg font-bold">Encomendas</span>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}

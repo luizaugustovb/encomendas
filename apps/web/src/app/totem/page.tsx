@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import jsQR from "jsqr";
 import {
   Package, QrCode, Camera, CheckCircle, XCircle,
-  Keyboard, Loader2, UserCheck, RotateCcw, Users,
+  Keyboard, Loader2, UserCheck, RotateCcw, Users, Shield,
 } from "lucide-react";
 
 type Step =
@@ -31,6 +32,16 @@ interface Resident {
 }
 
 export default function TotemPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center bg-slate-900"><Loader2 className="h-8 w-8 animate-spin text-blue-400" /></div>}>
+      <TotemContent />
+    </Suspense>
+  );
+}
+
+function TotemContent() {
+  const searchParams = useSearchParams();
+  const tenantId = searchParams.get("tenant") || "";
   const [step, setStep] = useState<Step>("scan");
   const [delivery, setDelivery] = useState<DeliveryData | null>(null);
   const [manualCode, setManualCode] = useState("");
@@ -44,6 +55,8 @@ export default function TotemPage() {
   const [scanStatus, setScanStatus] = useState<string>("");
   const [residents, setResidents] = useState<Resident[]>([]);
   const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
+  const [rtspCameraUrl, setRtspCameraUrl] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -73,6 +86,15 @@ export default function TotemPage() {
       stopCamera();
     };
   }, []);
+
+  // Load RTSP config if tenantId provided
+  useEffect(() => {
+    if (tenantId) {
+      api.totemGetRtspConfig(tenantId).then((data: any) => {
+        if (data?.rtspCameraUrl) setRtspCameraUrl(data.rtspCameraUrl);
+      }).catch(() => {});
+    }
+  }, [tenantId]);
 
   // Manage camera based on step changes
   useEffect(() => {
@@ -334,8 +356,23 @@ export default function TotemPage() {
               muted
             />
 
-            {/* QR Frame overlay */}
-            <div className="absolute inset-0 flex items-center justify-end pr-[8%]">
+            {/* QR Frame overlay + Face Frame */}
+            <div className="absolute inset-0 flex items-center justify-between px-[5%]">
+              {/* Face frame - lado esquerdo */}
+              <div className="relative flex flex-col items-center">
+                <div className="relative h-44 w-36 rounded-[50%] border-4 border-green-400 shadow-[0_0_20px_rgba(34,197,94,0.2)] lg:h-56 lg:w-44">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <UserCheck className="h-10 w-10 text-green-400/30" />
+                  </div>
+                </div>
+                <div className="mt-2 text-center">
+                  <p className="text-xs font-medium text-green-300 drop-shadow-lg">
+                    Posicione o rosto aqui
+                  </p>
+                </div>
+              </div>
+
+              {/* QR Frame - lado direito */}
               <div className="relative">
                 <div className="relative h-56 w-56 rounded-2xl border-4 border-blue-400 shadow-[0_0_30px_rgba(59,130,246,0.3)] lg:h-72 lg:w-72">
                   <div className="absolute -left-1 -top-1 h-8 w-8 rounded-tl-2xl border-l-4 border-t-4 border-blue-300" />
@@ -362,9 +399,13 @@ export default function TotemPage() {
           {/* Painel lateral - 30% */}
           <div className="flex h-full flex-col items-center justify-between bg-slate-900 p-6" style={{ width: "30%" }}>
             <div className="flex flex-col items-center gap-4 pt-8">
-              <div className="rounded-full bg-blue-600/20 p-4">
-                <Package className="h-12 w-12 text-blue-400" />
-              </div>
+              {!logoError ? (
+                <img src="/logo.png" alt="Logo" className="h-16 w-auto object-contain" onError={() => setLogoError(true)} />
+              ) : (
+                <div className="rounded-full bg-blue-600/20 p-4">
+                  <Package className="h-12 w-12 text-blue-400" />
+                </div>
+              )}
               <h1 className="text-center text-2xl font-bold lg:text-3xl">
                 Retirada de<br />Encomendas
               </h1>
@@ -373,7 +414,7 @@ export default function TotemPage() {
               </p>
             </div>
 
-            <div className="flex flex-col items-center gap-6">
+            <div className="flex flex-col items-center gap-4 w-full">
               <div className="flex items-center gap-3 rounded-xl bg-slate-800/80 px-5 py-3">
                 <QrCode className="h-8 w-8 shrink-0 text-blue-400" />
                 <div>
@@ -382,7 +423,7 @@ export default function TotemPage() {
                 </div>
               </div>
 
-              <div className="h-8 w-px bg-slate-700" />
+              <div className="h-6 w-px bg-slate-700" />
 
               <button
                 onClick={() => setShowManualInput(true)}
@@ -394,6 +435,39 @@ export default function TotemPage() {
                   <p className="text-xs text-slate-400">manualmente</p>
                 </div>
               </button>
+
+              {/* Ambiente Monitorado - RTSP Camera */}
+              {rtspCameraUrl && (
+                <>
+                  <div className="h-4 w-px bg-slate-700" />
+                  <div className="w-full rounded-xl border border-slate-700 bg-slate-800/60 p-3">
+                    <div className="mb-2 flex items-center justify-center gap-2">
+                      <Shield className="h-4 w-4 text-red-400" />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-red-400">
+                        Ambiente Monitorado
+                      </span>
+                    </div>
+                    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+                      <img
+                        src={rtspCameraUrl}
+                        alt="Câmera de monitoramento"
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                          (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+                        }}
+                      />
+                      <div className="hidden absolute inset-0 flex items-center justify-center text-slate-500">
+                        <Camera className="h-8 w-8" />
+                      </div>
+                      <div className="absolute left-2 top-2 flex items-center gap-1">
+                        <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                        <span className="text-[10px] font-medium text-red-400">REC</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="w-full pb-8">

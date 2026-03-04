@@ -24,10 +24,17 @@ interface AuditEvent {
     photoUrl: string | null;
     withdrawPhotoUrl: string | null;
     user: { id: string; name: string; photoUrl: string | null };
-    unit: { number: string; block: string | null; type: string };
+    unit: { id: string; number: string; block: string | null; type: string };
     withdrawnBy: { id: string; name: string; photoUrl: string | null } | null;
   };
   user: { id: string; name: string; photoUrl: string | null; role: string } | null;
+}
+
+interface UnitOption {
+  id: string;
+  number: string;
+  block: string | null;
+  type: string;
 }
 
 const EVENT_TYPE_LABELS: Record<string, { label: string; color: string; icon: any }> = {
@@ -56,12 +63,19 @@ export default function AuditLogsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
   const [photoModal, setPhotoModal] = useState<string | null>(null);
+  const [units, setUnits] = useState<UnitOption[]>([]);
 
   // Filters
   const [filterType, setFilterType] = useState("");
   const [filterCode, setFilterCode] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
+  const [filterUnitId, setFilterUnitId] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+    api.getUnits(token).then((data: any) => setUnits(data || [])).catch(() => {});
+  }, [token]);
 
   const loadLogs = useCallback(async () => {
     if (!token) return;
@@ -71,6 +85,7 @@ export default function AuditLogsPage() {
       if (filterType) filters.type = filterType;
       if (filterFrom) filters.from = filterFrom;
       if (filterTo) filters.to = filterTo;
+      if (filterUnitId) filters.unitId = filterUnitId;
       const data = await api.getAuditLogs(token, filters);
       let filtered = data as AuditEvent[];
       // Client-side filter by delivery code (API filters by deliveryId, not code)
@@ -83,7 +98,7 @@ export default function AuditLogsPage() {
       console.error("Erro ao carregar logs:", err);
     }
     setLoading(false);
-  }, [token, filterType, filterCode, filterFrom, filterTo]);
+  }, [token, filterType, filterCode, filterFrom, filterTo, filterUnitId]);
 
   useEffect(() => {
     loadLogs();
@@ -128,7 +143,7 @@ export default function AuditLogsPage() {
       {/* Filters */}
       {showFilters && (
         <div className="rounded-lg border bg-card p-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Código da Encomenda</label>
               <input
@@ -148,6 +163,21 @@ export default function AuditLogsPage() {
               >
                 {EVENT_TYPES_FILTER.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Unidade / Apartamento</label>
+              <select
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={filterUnitId}
+                onChange={(e) => setFilterUnitId(e.target.value)}
+              >
+                <option value="">Todas</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.type} {u.number}{u.block ? ` - Bl ${u.block}` : ""}
+                  </option>
                 ))}
               </select>
             </div>
@@ -178,7 +208,7 @@ export default function AuditLogsPage() {
               Aplicar
             </button>
             <button
-              onClick={() => { setFilterCode(""); setFilterType(""); setFilterFrom(""); setFilterTo(""); }}
+              onClick={() => { setFilterCode(""); setFilterType(""); setFilterFrom(""); setFilterTo(""); setFilterUnitId(""); }}
               className="rounded-md border px-4 py-2 text-sm hover:bg-accent"
             >
               Limpar

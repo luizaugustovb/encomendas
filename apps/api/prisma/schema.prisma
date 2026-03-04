@@ -34,6 +34,7 @@ model TenantConfig {
   hikvisionUser     String?  @map("hikvision_user")
   hikvisionPassword String?  @map("hikvision_password")
   hikvisionEnabled  Boolean  @default(false) @map("hikvision_enabled")
+  rtspCameraUrl     String?  @map("rtsp_camera_url")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
   tenant            Tenant   @relation(fields: [tenantId], references: [id])
