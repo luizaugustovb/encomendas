@@ -357,16 +357,16 @@ function TotemContent() {
             />
 
             {/* QR Frame overlay + Face Frame */}
-            <div className="absolute inset-0 flex items-center justify-between px-[5%]">
-              {/* Face frame - lado esquerdo */}
-              <div className="relative flex flex-col items-center">
-                <div className="relative h-44 w-36 rounded-[50%] border-4 border-green-400 shadow-[0_0_20px_rgba(34,197,94,0.2)] lg:h-56 lg:w-44">
+            <div className="absolute inset-0 flex items-center justify-between px-[3%]">
+              {/* Face frame - lado esquerdo (grande, circular) */}
+              <div className="relative flex flex-col items-center" style={{ marginLeft: "5%" }}>
+                <div className="relative h-[22rem] w-[22rem] rounded-full border-4 border-green-400 shadow-[0_0_40px_rgba(34,197,94,0.15)] lg:h-[28rem] lg:w-[28rem]">
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <UserCheck className="h-10 w-10 text-green-400/30" />
+                    <UserCheck className="h-16 w-16 text-green-400/20" />
                   </div>
                 </div>
-                <div className="mt-2 text-center">
-                  <p className="text-xs font-medium text-green-300 drop-shadow-lg">
+                <div className="mt-3 text-center">
+                  <p className="text-sm font-medium text-green-300 drop-shadow-lg">
                     Posicione o rosto aqui
                   </p>
                 </div>
