@@ -410,9 +410,33 @@ export class DeliveriesService {
   }
 
   /**
-   * Retirada via totem (sem autenticação JWT, usa código da encomenda)
+   * Lista moradores ativos da mesma unidade da encomenda (para fluxo "não sou eu" no totem)
    */
-  async withdrawFromTotem(code: string, withdrawPhotoUrl?: string) {
+  async getUnitResidentsByCode(code: string) {
+    const delivery = await this.prisma.delivery.findFirst({
+      where: { OR: [{ code }, { qrcode: code }] },
+      select: { unitId: true, userId: true },
+    });
+    if (!delivery) throw new NotFoundException('Encomenda não encontrada');
+
+    const residents = await this.prisma.user.findMany({
+      where: {
+        unitId: delivery.unitId,
+        role: 'MORADOR',
+        active: true,
+      },
+      select: { id: true, name: true, photoUrl: true },
+      orderBy: { name: 'asc' },
+    });
+
+    return residents;
+  }
+
+  /**
+   * Retirada via totem (sem autenticação JWT, usa código da encomenda)
+   * Agora aceita múltiplas fotos e identificação de quem retirou
+   */
+  async withdrawFromTotem(code: string, photoUrls: string[] = [], withdrawnById?: string) {
     const delivery = await this.prisma.delivery.findFirst({
       where: {
         OR: [{ code }, { qrcode: code }],
@@ -423,31 +447,97 @@ export class DeliveriesService {
     if (!delivery) throw new NotFoundException('Encomenda não encontrada');
     if (delivery.status === 'WITHDRAWN') throw new BadRequestException('Encomenda já foi retirada');
 
+    // Se withdrawnById informado, verifica se é morador da mesma unidade
+    const actualWithdrawnById = withdrawnById || delivery.userId;
+    if (withdrawnById && withdrawnById !== delivery.userId) {
+      const withdrawnByUser = await this.prisma.user.findUnique({
+        where: { id: withdrawnById },
+        select: { unitId: true, name: true },
+      });
+      if (!withdrawnByUser || withdrawnByUser.unitId !== delivery.unitId) {
+        throw new BadRequestException('Apenas moradores da mesma unidade podem retirar esta encomenda');
+      }
+    }
+
+    const mainPhotoUrl = photoUrls[0] || undefined;
+
     const updated = await this.prisma.delivery.update({
       where: { id: delivery.id },
       data: {
         status: 'WITHDRAWN',
         withdrawnAt: new Date(),
-        ...(withdrawPhotoUrl ? { withdrawPhotoUrl } : {}),
+        withdrawnById: actualWithdrawnById,
+        ...(mainPhotoUrl ? { withdrawPhotoUrl: mainPhotoUrl } : {}),
       },
-      include: { user: true, unit: true },
+      include: { user: true, unit: true, withdrawnBy: { select: { id: true, name: true } } },
     });
 
+    // Registrar evento principal de retirada
     await this.prisma.deliveryEvent.create({
       data: {
         deliveryId: delivery.id,
-        userId: delivery.userId,
+        userId: actualWithdrawnById,
         type: 'WITHDRAWN',
-        metadata: JSON.stringify({ withdrawnAt: new Date(), source: 'TOTEM', withdrawPhotoUrl }),
+        photoUrl: mainPhotoUrl,
+        metadata: JSON.stringify({
+          withdrawnAt: new Date().toISOString(),
+          source: 'TOTEM',
+          withdrawnById: actualWithdrawnById,
+          isOriginalOwner: actualWithdrawnById === delivery.userId,
+          totalPhotos: photoUrls.length,
+        }),
       },
     });
+
+    // Registrar cada foto capturada como evento separado para audit trail
+    for (let i = 0; i < photoUrls.length; i++) {
+      await this.prisma.deliveryEvent.create({
+        data: {
+          deliveryId: delivery.id,
+          userId: actualWithdrawnById,
+          type: 'TOTEM_PHOTO_CAPTURED',
+          photoUrl: photoUrls[i],
+          metadata: JSON.stringify({
+            photoIndex: i,
+            photoType: i === 0 ? 'face' : i === 1 ? 'package_with_person' : 'additional',
+            capturedAt: new Date().toISOString(),
+            source: 'TOTEM',
+          }),
+        },
+      });
+    }
+
+    // Se outro morador retirou (não o dono), registrar evento especial
+    if (actualWithdrawnById !== delivery.userId) {
+      await this.prisma.deliveryEvent.create({
+        data: {
+          deliveryId: delivery.id,
+          userId: actualWithdrawnById,
+          type: 'TOTEM_OTHER_RESIDENT',
+          photoUrl: mainPhotoUrl,
+          metadata: JSON.stringify({
+            originalOwnerId: delivery.userId,
+            originalOwnerName: delivery.user.name,
+            withdrawnById: actualWithdrawnById,
+          }),
+        },
+      });
+    }
 
     if (delivery.user.phone) {
       try {
         const whatsappToken = await this.tenantConfigService.getWhatsappToken(delivery.tenantId);
+        const withdrawnByName = actualWithdrawnById !== delivery.userId
+          ? (await this.prisma.user.findUnique({ where: { id: actualWithdrawnById }, select: { name: true } }))?.name || 'outro morador'
+          : delivery.user.name;
+
+        const extraMsg = actualWithdrawnById !== delivery.userId
+          ? `\n👤 Retirada por: ${withdrawnByName} (morador da mesma unidade)`
+          : '';
+
         await this.whatsappService.sendMessageWithToken(
           delivery.user.phone,
-          `✅ *Encomenda Retirada (Totem)*\n\nOlá ${delivery.user.name},\nSua encomenda (${delivery.code}) foi retirada via totem.\n\nData: ${new Date().toLocaleString('pt-BR')}`,
+          `✅ *Encomenda Retirada (Totem)*\n\nOlá ${delivery.user.name},\nSua encomenda (${delivery.code}) foi retirada via totem.${extraMsg}\n\nData: ${new Date().toLocaleString('pt-BR')}`,
           whatsappToken,
         );
       } catch (error) {
@@ -461,6 +551,51 @@ export class DeliveriesService {
     });
 
     return updated;
+  }
+
+  /**
+   * Audit logs - retorna eventos detalhados de todas as encomendas (somente ADMIN/ADMIN_CONDOMINIO)
+   */
+  async getAuditLogs(tenantId: string, role: string, filters?: { deliveryId?: string; type?: string; from?: string; to?: string }) {
+    const isAdmin = role === 'ADMIN';
+    const where: any = {};
+
+    if (!isAdmin) {
+      where.delivery = { tenantId };
+    }
+
+    if (filters?.deliveryId) {
+      where.deliveryId = filters.deliveryId;
+    }
+    if (filters?.type) {
+      where.type = filters.type;
+    }
+    if (filters?.from || filters?.to) {
+      where.createdAt = {};
+      if (filters.from) where.createdAt.gte = new Date(filters.from);
+      if (filters.to) where.createdAt.lte = new Date(filters.to);
+    }
+
+    return this.prisma.deliveryEvent.findMany({
+      where,
+      include: {
+        delivery: {
+          select: {
+            id: true,
+            code: true,
+            status: true,
+            photoUrl: true,
+            withdrawPhotoUrl: true,
+            user: { select: { id: true, name: true, photoUrl: true } },
+            unit: { select: { number: true, block: true, type: true } },
+            withdrawnBy: { select: { id: true, name: true, photoUrl: true } },
+          },
+        },
+        user: { select: { id: true, name: true, photoUrl: true, role: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
   }
 
   async getDashboardStats(tenantId: string, role?: string) {

@@ -58,6 +58,7 @@ model User {
   hikvisionSynced     Boolean         @default(false) @map("hikvision_synced")
   deliveriesReceived  Delivery[]      @relation("ReceivedBy")
   deliveriesOwned     Delivery[]      @relation("DeliveryOwner")
+  deliveriesWithdrawn Delivery[]      @relation("WithdrawnBy")
   deliveryEvents      DeliveryEvent[]
   tenant              Tenant          @relation(fields: [tenantId], references: [id])
   unit                Unit?           @relation(fields: [unitId], references: [id])
@@ -109,12 +110,14 @@ model Delivery {
   receivedById     String          @map("received_by_id")
   description      String?
   withdrawnAt      DateTime?       @map("withdrawn_at")
+  withdrawnById    String?         @map("withdrawn_by_id")
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
   photoUrl         String?         @map("photo_url")
   withdrawPhotoUrl String?         @map("withdraw_photo_url")
   location         Location        @relation(fields: [locationId], references: [id])
   receivedBy       User            @relation("ReceivedBy", fields: [receivedById], references: [id])
+  withdrawnBy      User?           @relation("WithdrawnBy", fields: [withdrawnById], references: [id])
   tenant           Tenant          @relation(fields: [tenantId], references: [id])
   unit             Unit            @relation(fields: [unitId], references: [id])
   user             User            @relation("DeliveryOwner", fields: [userId], references: [id])
@@ -129,6 +132,7 @@ model DeliveryEvent {
   userId     String?   @map("user_id")
   type       EventType
   metadata   String?
+  photoUrl   String?   @map("photo_url")
   createdAt  DateTime  @default(now()) @map("created_at")
   delivery   Delivery  @relation(fields: [deliveryId], references: [id])
   user       User?     @relation(fields: [userId], references: [id])
@@ -153,5 +157,7 @@ enum EventType {
   CREATED
   WHATSAPP_SENT
   WITHDRAWN
+  TOTEM_PHOTO_CAPTURED
+  TOTEM_OTHER_RESIDENT
   DOOR_ACCESS
 }

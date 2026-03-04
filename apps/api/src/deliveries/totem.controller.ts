@@ -1,8 +1,8 @@
 import {
   Controller, Get, Post, Body, Param,
-  UseInterceptors, UploadedFile,
+  UseInterceptors, UploadedFiles,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -11,6 +11,7 @@ import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 
 export class TotemWithdrawDto {
   @IsString() @IsNotEmpty() code: string;
+  @IsOptional() @IsString() withdrawnById?: string;
 }
 
 /**
@@ -30,11 +31,20 @@ export class TotemController {
   }
 
   /**
-   * Confirma retirada via totem com foto da pessoa
+   * Lista moradores da mesma unidade da encomenda (para seleção "não sou eu")
+   */
+  @Get('delivery/:code/residents')
+  async getUnitResidents(@Param('code') code: string) {
+    return this.deliveriesService.getUnitResidentsByCode(code);
+  }
+
+  /**
+   * Confirma retirada via totem com fotos (rosto + encomenda)
+   * Aceita até 3 fotos: photo_face, photo_package, photo_full
    */
   @Post('withdraw')
   @UseInterceptors(
-    FileInterceptor('photo', {
+    FilesInterceptor('photos', 3, {
       storage: diskStorage({
         destination: './uploads/withdrawals',
         filename: (req, file, cb) => {
@@ -53,9 +63,13 @@ export class TotemController {
   )
   async withdraw(
     @Body() dto: TotemWithdrawDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFiles() files?: Express.Multer.File[],
   ) {
-    const withdrawPhotoUrl = file ? `/uploads/withdrawals/${file.filename}` : undefined;
-    return this.deliveriesService.withdrawFromTotem(dto.code, withdrawPhotoUrl);
+    const photoUrls: string[] = (files || []).map(f => `/uploads/withdrawals/${f.filename}`);
+    return this.deliveriesService.withdrawFromTotem(
+      dto.code,
+      photoUrls,
+      dto.withdrawnById,
+    );
   }
 }

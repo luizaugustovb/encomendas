@@ -43,6 +43,19 @@ export class DeliveriesController {
     return this.deliveriesService.getDashboardStats(tenantId, user.role);
   }
 
+  @Get('audit/logs')
+  @Roles('ADMIN', 'ADMIN_CONDOMINIO')
+  getAuditLogs(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: any,
+    @Query('deliveryId') deliveryId?: string,
+    @Query('type') type?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.deliveriesService.getAuditLogs(tenantId, user.role, { deliveryId, type, from, to });
+  }
+
   @Get(':id')
   @Roles('ADMIN', 'ADMIN_CONDOMINIO', 'PORTEIRO', 'ZELADOR', 'MORADOR')
   findOne(@Param('id') id: string, @TenantId() tenantId: string, @CurrentUser() user: any) {

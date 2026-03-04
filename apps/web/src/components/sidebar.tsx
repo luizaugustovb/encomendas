@@ -14,11 +14,13 @@ import {
   Shield,
   Settings,
   Monitor,
+  FileSearch,
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
   { href: "/dashboard/deliveries", label: "Encomendas", icon: Package, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
+  { href: "/dashboard/audit", label: "Logs de Auditoria", icon: FileSearch, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/users", label: "Usuários", icon: Users, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/units", label: "Unidades", icon: Building2, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/locations", label: "Localizações", icon: MapPin, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },

@@ -148,10 +148,19 @@ export const api = {
       }
       return r.json();
     }),
-  totemWithdraw: (code: string, photo?: File) => {
+  totemGetResidents: (code: string) =>
+    fetch(`/totem-api/delivery/${encodeURIComponent(code)}/residents`).then(async (r) => {
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
+        throw new Error(err.message || `HTTP ${r.status}`);
+      }
+      return r.json();
+    }),
+  totemWithdraw: (code: string, photos: File[] = [], withdrawnById?: string) => {
     const formData = new FormData();
     formData.append('code', code);
-    if (photo) formData.append('photo', photo);
+    photos.forEach((photo) => formData.append('photos', photo));
+    if (withdrawnById) formData.append('withdrawnById', withdrawnById);
     return fetch('/totem-api/withdraw', { method: 'POST', body: formData }).then(async (r) => {
       if (!r.ok) {
         const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
@@ -159,5 +168,16 @@ export const api = {
       }
       return r.json();
     });
+  },
+
+  // Audit Logs
+  getAuditLogs: (token: string, filters?: { deliveryId?: string; type?: string; from?: string; to?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.deliveryId) params.append('deliveryId', filters.deliveryId);
+    if (filters?.type) params.append('type', filters.type);
+    if (filters?.from) params.append('from', filters.from);
+    if (filters?.to) params.append('to', filters.to);
+    const qs = params.toString();
+    return fetchApi(`/deliveries/audit/logs${qs ? `?${qs}` : ''}`, { token });
   },
 };
