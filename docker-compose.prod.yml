@@ -70,8 +70,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api || exit 1"]
       interval: 15s
-      timeout: 5s
-      retries: 3
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   # ---------- Frontend (Next.js) ----------
   web:
@@ -87,7 +88,7 @@ services:
       API_INTERNAL_URL: http://api:3001
     depends_on:
       api:
-        condition: service_healthy
+        condition: service_started
     networks:
       - internal
 

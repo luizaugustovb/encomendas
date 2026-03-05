@@ -21,8 +21,14 @@ fi
 
 echo "===== Configurando SSL para: $DOMAIN ====="
 
-# 1. Nginx precisa estar rodando para o desafio HTTP
+# 1. Subir todos os serviços (nginx precisa estar rodando para o desafio HTTP)
+docker compose -f docker-compose.prod.yml up -d postgres redis
+echo "Aguardando banco..."
+sleep 5
+docker compose -f docker-compose.prod.yml up -d api web
+sleep 10
 docker compose -f docker-compose.prod.yml up -d nginx
+sleep 5
 
 # 2. Obter certificado
 echo "[1/3] Obtendo certificado SSL..."
