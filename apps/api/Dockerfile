@@ -9,8 +9,8 @@ FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev; \
-    else npm install --omit=dev; fi
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev --legacy-peer-deps; \
+    else npm install --omit=dev --legacy-peer-deps; fi
 # Generate Prisma client
 RUN npx prisma generate
 
@@ -19,8 +19,8 @@ FROM base AS dev-deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
-RUN if [ -f package-lock.json ]; then npm ci; \
-    else npm install; fi
+RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; \
+    else npm install --legacy-peer-deps; fi
 RUN npx prisma generate
 
 # --- Build ---
