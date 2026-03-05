@@ -26,7 +26,7 @@ docker compose -f docker-compose.prod.yml up -d nginx
 
 # 2. Obter certificado
 echo "[1/3] Obtendo certificado SSL..."
-docker compose -f docker-compose.prod.yml run --rm certbot \
+docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
   certbot certonly \
   --webroot \
   --webroot-path=/var/www/certbot \
