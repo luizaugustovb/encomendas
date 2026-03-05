@@ -130,8 +130,12 @@ export class HikvisionService implements OnModuleInit {
   }
 
   private createClient(config: HikvisionConfig): AxiosInstance {
+    const baseURL = config.ip.startsWith('http')
+      ? config.ip
+      : `http://${config.ip}${config.port === 80 ? '' : ':' + config.port}`;
+
     const client = axios.create({
-      baseURL: `http://${config.ip}${config.port === 80 ? '' : ':' + config.port}`,
+      baseURL,
       timeout: 45000,
       headers: { 'Content-Type': 'application/json' },
       validateStatus: (status) => status < 500,
@@ -147,6 +151,11 @@ export class HikvisionService implements OnModuleInit {
         req.headers['Authorization'] = this.computeDigestAuth(
           wwwAuth, (req.method || 'GET').toUpperCase(), uri, config.user, config.password
         );
+      }
+
+      // Se estiver usando a ponte local (URL), envia a chave de segurança
+      if (config.ip.startsWith('http')) {
+        req.headers['x-bridge-key'] = process.env.BRIDGE_API_KEY || 'minha-chave-segura-123';
       }
       return req;
     });
@@ -173,6 +182,12 @@ export class HikvisionService implements OnModuleInit {
 
         // Reenvia a requisição com o header Digest
         originalConfig.headers['Authorization'] = authHeader;
+
+        // Mantém a chave da ponte no retry
+        if (config.ip.startsWith('http')) {
+          originalConfig.headers['x-bridge-key'] = process.env.BRIDGE_API_KEY || 'minha-chave-segura-123';
+        }
+
         // Agora queremos que erros reais (4xx/5xx) sejam lançados normalmente
         originalConfig.validateStatus = (status) => status >= 200 && status < 300;
         return axios.request(originalConfig);
@@ -194,7 +209,9 @@ export class HikvisionService implements OnModuleInit {
 
   /** Monta a URL base do equipamento */
   private getBaseUrl(config: HikvisionConfig): string {
-    return `http://${config.ip}:${config.port}`;
+    return config.ip.startsWith('http')
+      ? config.ip
+      : `http://${config.ip}:${config.port}`;
   }
 
   /** Obtém config Hikvision do tenant ou lança erro */

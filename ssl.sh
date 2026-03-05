@@ -33,8 +33,7 @@ docker compose -f docker-compose.prod.yml run --rm certbot \
   --email ${MASTER_EMAIL:-admin@${DOMAIN}} \
   --agree-tos \
   --no-eff-email \
-  -d ${DOMAIN} \
-  -d www.${DOMAIN}
+  -d ${DOMAIN}
 
 # 3. Atualizar nginx com SSL
 echo "[2/3] Atualizando configuração Nginx para HTTPS..."
@@ -50,7 +49,7 @@ upstream web_upstream {
 # Redirecionar HTTP → HTTPS
 server {
     listen 80;
-    server_name DOMAIN_PLACEHOLDER www.DOMAIN_PLACEHOLDER;
+    server_name DOMAIN_PLACEHOLDER;
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -63,7 +62,7 @@ server {
 
 server {
     listen 443 ssl http2;
-    server_name DOMAIN_PLACEHOLDER www.DOMAIN_PLACEHOLDER;
+    server_name DOMAIN_PLACEHOLDER;
 
     ssl_certificate /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/privkey.pem;
