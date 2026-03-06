@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -16,8 +16,58 @@ import {
   Settings,
   Monitor,
   FileSearch,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
 } from "lucide-react";
 
+// ===== Context para compartilhar estado da sidebar =====
+interface SidebarContextType {
+  collapsed: boolean;
+  setCollapsed: (v: boolean) => void;
+  mobileOpen: boolean;
+  setMobileOpen: (v: boolean) => void;
+}
+
+const SidebarContext = createContext<SidebarContextType>({
+  collapsed: false,
+  setCollapsed: () => { },
+  mobileOpen: false,
+  setMobileOpen: () => { },
+});
+
+export function useSidebar() {
+  return useContext(SidebarContext);
+}
+
+export function SidebarProvider({ children }: { children: React.ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Auto-collapse em telas menores que 1024px
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setCollapsed(true);
+      }
+      // Fecha mobile overlay ao redimensionar para desktop
+      if (window.innerWidth >= 768) {
+        setMobileOpen(false);
+      }
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return (
+    <SidebarContext.Provider value={{ collapsed, setCollapsed, mobileOpen, setMobileOpen }}>
+      {children}
+    </SidebarContext.Provider>
+  );
+}
+
+// ===== Navigation items =====
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
   { href: "/dashboard/deliveries", label: "Encomendas", icon: Package, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
@@ -30,68 +80,160 @@ const navItems = [
   { href: "/dashboard/audit", label: "Logs de Auditoria", icon: FileSearch, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
 ];
 
+// ===== Sidebar Component =====
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [logoError, setLogoError] = useState(false);
+  const { collapsed, setCollapsed, mobileOpen, setMobileOpen } = useSidebar();
 
   const filteredNav = navItems.filter(
     (item) => user && item.roles.includes(user.role)
   );
 
-  return (
-    <aside className="flex h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
-      {/* Logo */}
-      <div className="flex h-16 items-center justify-center border-b px-6">
-        {!logoError ? (
-          <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" onError={() => setLogoError(true)} />
-        ) : (
-          <div className="flex items-center gap-2">
-            <Package className="h-6 w-6 text-primary" />
-            <span className="text-lg font-bold">Encomendas</span>
-          </div>
+  const handleNavClick = () => {
+    // Fecha sidebar mobile ao navegar
+    if (window.innerWidth < 768) {
+      setMobileOpen(false);
+    }
+  };
+
+  const sidebarContent = (
+    <aside
+      className={cn(
+        "flex h-screen flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300",
+        collapsed ? "w-[68px]" : "w-64"
+      )}
+    >
+      {/* Logo + Toggle */}
+      <div className={cn(
+        "flex h-16 items-center border-b shrink-0",
+        collapsed ? "justify-center px-2" : "justify-between px-4"
+      )}>
+        {!collapsed && (
+          <>
+            {!logoError ? (
+              <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" onError={() => setLogoError(true)} />
+            ) : (
+              <div className="flex items-center gap-2">
+                <Package className="h-6 w-6 text-primary" />
+                <span className="text-lg font-bold">Encomendas</span>
+              </div>
+            )}
+          </>
         )}
+        {collapsed && !logoError && (
+          <Package className="h-6 w-6 text-primary" />
+        )}
+
+        {/* Toggle collapse - só aparece em desktop */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="hidden md:flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+        >
+          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+        </button>
+
+        {/* Close button - só aparece no mobile */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav className="flex-1 space-y-1 px-2 py-4 overflow-y-auto">
         {filteredNav.map((item) => {
-          const isActive = pathname === item.href || 
+          const isActive = pathname === item.href ||
             (item.href !== "/dashboard" && pathname.startsWith(item.href));
 
           return (
             <Link
               key={item.href}
               href={item.href}
+              onClick={handleNavClick}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                "flex items-center rounded-lg text-sm transition-colors",
+                collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2",
                 isActive
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
             >
-              <item.icon className="h-4 w-4" />
-              {item.label}
+              <item.icon className="h-4 w-4 shrink-0" />
+              {!collapsed && <span className="truncate">{item.label}</span>}
             </Link>
           );
         })}
       </nav>
 
       {/* User info */}
-      <div className="border-t p-4">
-        <div className="mb-2">
-          <p className="text-sm font-medium">{user?.name}</p>
-          <p className="text-xs text-muted-foreground">{user?.tenantName}</p>
-          <p className="text-xs text-muted-foreground capitalize">{user?.role?.toLowerCase().replace('_', ' ')}</p>
-        </div>
+      <div className="border-t p-2 shrink-0">
+        {!collapsed && (
+          <div className="mb-2 px-2">
+            <p className="text-sm font-medium truncate">{user?.name}</p>
+            <p className="text-xs text-muted-foreground truncate">{user?.tenantName}</p>
+            <p className="text-xs text-muted-foreground capitalize truncate">{user?.role?.toLowerCase().replace('_', ' ')}</p>
+          </div>
+        )}
         <button
           onClick={logout}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
+          title={collapsed ? "Sair" : undefined}
+          className={cn(
+            "flex w-full items-center rounded-lg text-sm text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground",
+            collapsed ? "justify-center px-2 py-2.5" : "gap-2 px-3 py-2"
+          )}
         >
-          <LogOut className="h-4 w-4" />
-          Sair
+          <LogOut className="h-4 w-4 shrink-0" />
+          {!collapsed && "Sair"}
         </button>
       </div>
     </aside>
   );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <div className="hidden md:block">
+        {sidebarContent}
+      </div>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMobileOpen(false)}
+          />
+          {/* Sidebar */}
+          <div className="relative z-10 h-full w-64 animate-in slide-in-from-left duration-300">
+            {/* Force expanded on mobile overlay */}
+            <SidebarMobileOverride>
+              {sidebarContent}
+            </SidebarMobileOverride>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Helper: força sidebar expandida no overlay mobile
+function SidebarMobileOverride({ children }: { children: React.ReactNode }) {
+  const ctx = useSidebar();
+  const wasCollapsed = ctx.collapsed;
+
+  useEffect(() => {
+    if (wasCollapsed) ctx.setCollapsed(false);
+    return () => {
+      if (wasCollapsed) ctx.setCollapsed(true);
+    };
+  }, []);
+
+  return <>{children}</>;
 }

@@ -36,7 +36,8 @@ export default function DeliveriesPage() {
   const [formDescription, setFormDescription] = useState("");
   const [formPhoto, setFormPhoto] = useState<File | null>(null);
   const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null);
-  const photoRef = useRef<HTMLInputElement>(null);
+  const photoCameraRef = useRef<HTMLInputElement>(null);
+  const photoUploadRef = useRef<HTMLInputElement>(null);
 
   // Withdraw form
   const [withdrawCode, setWithdrawCode] = useState("");
@@ -246,30 +247,53 @@ export default function DeliveriesPage() {
                 </div>
 
                 {/* Photo upload */}
-                <div className="space-y-2">
+                <div className="space-y-3 pb-2">
                   <Label>Foto do Produto (opcional)</Label>
-                  <div
-                    className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors"
-                    onClick={() => photoRef.current?.click()}
-                  >
-                    {formPhotoPreview ? (
-                      <div className="relative">
-                        <img src={formPhotoPreview} alt="Preview" className="max-h-48 mx-auto rounded-md object-contain" />
-                        <p className="text-xs text-muted-foreground mt-2">Clique para trocar a foto</p>
+
+                  {formPhotoPreview ? (
+                    <div className="relative border border-slate-200 dark:border-slate-800 rounded-lg p-2 bg-slate-50 dark:bg-slate-900/50">
+                      <img src={formPhotoPreview} alt="Preview" className="max-h-48 mx-auto rounded-md object-contain" />
+                      <div className="absolute top-2 right-2 flex gap-2">
+                        <Button type="button" size="sm" variant="secondary" onClick={() => setFormPhotoPreview(null)}>
+                          Remover
+                        </Button>
                       </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2 py-4">
-                        <ImageIcon className="w-10 h-10 text-muted-foreground/50" />
-                        <p className="text-sm text-muted-foreground">Clique para adicionar foto</p>
-                        <p className="text-xs text-muted-foreground/70">JPG, PNG ou WebP (max 5MB)</p>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1 h-24 flex flex-col items-center justify-center gap-2 border-dashed bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/50 dark:hover:bg-slate-800"
+                        onClick={() => photoCameraRef.current?.click()}
+                      >
+                        <Camera className="w-6 h-6 text-blue-500" />
+                        <span className="text-sm font-medium">Tirar Foto</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1 h-24 flex flex-col items-center justify-center gap-2 border-dashed bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/50 dark:hover:bg-slate-800"
+                        onClick={() => photoUploadRef.current?.click()}
+                      >
+                        <ImageIcon className="w-6 h-6 text-emerald-500" />
+                        <span className="text-sm font-medium">Fazer Upload</span>
+                      </Button>
+                    </div>
+                  )}
+
                   <input
-                    ref={photoRef}
+                    ref={photoCameraRef}
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     capture="environment"
+                    className="hidden"
+                    onChange={handlePhotoChange}
+                  />
+                  <input
+                    ref={photoUploadRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
                     className="hidden"
                     onChange={handlePhotoChange}
                   />
