@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import jsQR from "jsqr";
 import {
   Package, QrCode, Camera, CheckCircle, XCircle,
-  Keyboard, Loader2, UserCheck, RotateCcw, Users, Shield,
+  Keyboard, Loader2, UserCheck, RotateCcw, Users, Shield, Settings,
 } from "lucide-react";
 
 type Step =
@@ -60,6 +60,7 @@ function TotemContent() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
   const [isMirrored, setIsMirrored] = useState(true);
   const [logoError, setLogoError] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -69,11 +70,17 @@ function TotemContent() {
   const lastScannedRef = useRef<string>("");
   const lastScannedTimeRef = useRef<number>(0);
 
-  // Inactivity timer - back to scan after 60s
+  // Inactivity timer - back to scan after 60s (only from non-scan steps)
   const inactivityRef = useRef<NodeJS.Timeout | null>(null);
+  const stepRef = useRef<Step>("scan");
+  // Keep stepRef in sync
+  useEffect(() => { stepRef.current = step; }, [step]);
+
   const resetInactivity = useCallback(() => {
     if (inactivityRef.current) clearTimeout(inactivityRef.current);
     inactivityRef.current = setTimeout(() => {
+      // Se já está na tela de scan, não faz nada (câmera fica ligada sempre)
+      if (stepRef.current === "scan") return;
       stopCamera();
       resetState();
       setStep("scan");
@@ -83,7 +90,7 @@ function TotemContent() {
   // Start camera on mount (directly in scan mode)
   useEffect(() => {
     enumerateDevices();
-    startCamera("environment").then(() => startQrScanning());
+    startCameraWithRetry("environment").then(() => startQrScanning());
     return () => {
       if (inactivityRef.current) clearTimeout(inactivityRef.current);
       stopQrScanning();
@@ -121,12 +128,15 @@ function TotemContent() {
 
   // Manage camera based on step changes
   useEffect(() => {
-    resetInactivity();
-    if (step === "scan") {
-      startCamera("environment").then(() => startQrScanning());
-      setShowManualInput(false);
-    } else {
+    if (step !== "scan") {
+      resetInactivity();
       stopQrScanning();
+    } else {
+      // Na tela scan: liga câmera e scanning, sem timer de inatividade
+      if (inactivityRef.current) clearTimeout(inactivityRef.current);
+      startCameraWithRetry("environment").then(() => startQrScanning());
+      setShowManualInput(false);
+      setShowSettings(false);
     }
   }, [step]);
 
@@ -158,7 +168,21 @@ function TotemContent() {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        // Aguarda o vídeo estar realmente pronto para reproduzir (importante no Android)
+        await new Promise<void>((resolve, reject) => {
+          const video = videoRef.current!;
+          const onCanPlay = () => {
+            video.removeEventListener("canplay", onCanPlay);
+            resolve();
+          };
+          video.addEventListener("canplay", onCanPlay);
+          video.play().catch(reject);
+          // Timeout de segurança: resolve após 3s mesmo se canplay não disparar
+          setTimeout(() => {
+            video.removeEventListener("canplay", onCanPlay);
+            resolve();
+          }, 3000);
+        });
 
         // Atualiza o ID da câmera selecionada se for automático
         const track = stream.getVideoTracks()[0];
@@ -183,6 +207,17 @@ function TotemContent() {
     }
   }
 
+  // Tenta iniciar a câmera com retry (útil para Android que pode demorar)
+  async function startCameraWithRetry(facingMode: "environment" | "user" | string = "environment", retries = 2) {
+    for (let i = 0; i <= retries; i++) {
+      await startCamera(facingMode);
+      // Verifica se o stream está ativo
+      if (streamRef.current && streamRef.current.active) return;
+      // Espera um pouco antes de tentar novamente
+      if (i < retries) await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
   function stopCamera() {
     stopQrScanning();
     if (streamRef.current) {
@@ -200,7 +235,14 @@ function TotemContent() {
     scanIntervalRef.current = setInterval(() => {
       if (!scanningRef.current) return;
       const video = videoRef.current;
-      if (!video || video.readyState < 2) return;
+      // readyState >= 2 = HAVE_CURRENT_DATA, verifica se o vídeo tem dados
+      if (!video || video.readyState < 2 || video.paused) {
+        // Se o vídeo pausou (Android pode pausar em background), tenta dar play
+        if (video && video.paused && video.srcObject) {
+          video.play().catch(() => { });
+        }
+        return;
+      }
 
       if (!scanCanvasRef.current) {
         scanCanvasRef.current = document.createElement("canvas");
@@ -234,7 +276,7 @@ function TotemContent() {
         stopQrScanning();
         searchDelivery(code);
       }
-    }, 250);
+    }, 300);
   }
 
   function stopQrScanning() {
@@ -470,47 +512,61 @@ function TotemContent() {
             </div>
 
             <div className="flex flex-col items-center gap-4 w-full">
-              {/* Seletor de Câmera */}
-              <div className="w-full rounded-xl bg-slate-800/60 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <Camera className="h-4 w-4" />
-                    <span className="text-xs font-semibold uppercase">Câmera Principal</span>
+              {/* Botão de Configurações (engrenagem discreta) */}
+              <button
+                onClick={() => setShowSettings(!showSettings)}
+                className="flex items-center gap-2 self-end rounded-lg px-3 py-1.5 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="text-[10px] uppercase">Config</span>
+              </button>
+
+              {/* Painel de Configurações (colapsável) */}
+              {showSettings && (
+                <div className="w-full space-y-3 rounded-xl border border-slate-700 bg-slate-800/80 p-4 animate-in fade-in duration-200">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Configurações da Câmera</p>
+
+                  {/* Seletor de Câmera */}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <Camera className="h-3 w-3" />
+                        <span className="text-xs">Câmera Principal</span>
+                      </div>
+                      <button
+                        onClick={enumerateDevices}
+                        className="text-[10px] text-blue-400 hover:underline"
+                      >
+                        Atualizar
+                      </button>
+                    </div>
+                    <select
+                      value={selectedDeviceId}
+                      onChange={(e) => startCamera(e.target.value)}
+                      className="w-full rounded-lg bg-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="environment">Câmera Padrão (Traseira)</option>
+                      <option value="user">Câmera Frontal</option>
+                      {videoDevices.filter(d => d.deviceId !== "").map((device) => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label || `Câmera ${videoDevices.indexOf(device) + 1}`}
+                        </option>
+                      ))}
+                    </select>
                   </div>
+
+                  {/* Toggle Espelhamento */}
                   <button
-                    onClick={enumerateDevices}
-                    className="text-[10px] text-blue-400 hover:underline"
+                    onClick={() => setIsMirrored(!isMirrored)}
+                    className="flex w-full items-center justify-between rounded-lg bg-slate-700/60 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700"
                   >
-                    Atualizar
+                    <span className="text-xs">Espelhar Câmera</span>
+                    <div className={`h-5 w-10 rounded-full p-1 transition-colors ${isMirrored ? 'bg-blue-600' : 'bg-slate-600'}`}>
+                      <div className={`h-3 w-3 rounded-full bg-white transition-transform ${isMirrored ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </div>
                   </button>
                 </div>
-                <select
-                  value={selectedDeviceId}
-                  onChange={(e) => startCamera(e.target.value)}
-                  className="w-full rounded-lg bg-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="environment">Câmera Padrão (Traseira)</option>
-                  <option value="user">Câmera Frontal</option>
-                  {videoDevices.filter(d => d.deviceId !== "").map((device) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Câmera ${videoDevices.indexOf(device) + 1}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Toggle Espelhamento */}
-              <div className="w-full">
-                <button
-                  onClick={() => setIsMirrored(!isMirrored)}
-                  className="flex w-full items-center justify-between rounded-xl bg-slate-800/60 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
-                >
-                  <span className="font-semibold uppercase text-xs">Espelhar Câmera</span>
-                  <div className={`h-5 w-10 rounded-full p-1 transition-colors ${isMirrored ? 'bg-blue-600' : 'bg-slate-600'}`}>
-                    <div className={`h-3 w-3 rounded-full bg-white transition-transform ${isMirrored ? 'translate-x-5' : 'translate-x-0'}`} />
-                  </div>
-                </button>
-              </div>
+              )}
 
               <div className="flex items-center gap-3 rounded-xl bg-slate-800/80 px-5 py-3 w-full">
                 <QrCode className="h-8 w-8 shrink-0 text-blue-400" />
