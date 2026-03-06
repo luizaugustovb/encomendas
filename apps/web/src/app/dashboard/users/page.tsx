@@ -314,7 +314,7 @@ export default function UsersPage() {
         </div>
         <Dialog open={openCreate} onOpenChange={(open) => { setOpenCreate(open); if (!open) resetCreateForm(); }}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Novo Usuário</Button>
+            <Button className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />Novo Usuário</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>

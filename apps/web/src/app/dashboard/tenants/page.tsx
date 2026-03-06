@@ -158,16 +158,16 @@ export default function TenantsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Condomínios</h1>
           <p className="text-muted-foreground">Gerencie os condomínios do sistema</p>
         </div>
         <Dialog open={openCreate} onOpenChange={setOpenCreate}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Novo Condomínio</Button>
+            <Button className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />Novo Condomínio</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Cadastrar Condomínio</DialogTitle>
               <DialogDescription>Preencha os dados do novo condomínio</DialogDescription>
@@ -197,7 +197,7 @@ export default function TenantsPage() {
 
       {/* Edit Dialog */}
       <Dialog open={openEdit} onOpenChange={setOpenEdit}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Condomínio</DialogTitle>
             <DialogDescription>Altere os dados do condomínio</DialogDescription>
@@ -226,7 +226,7 @@ export default function TenantsPage() {
 
       {/* Permanent Delete Confirmation Dialog */}
       <Dialog open={openPermanentDelete} onOpenChange={setOpenPermanentDelete}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
@@ -270,8 +270,8 @@ export default function TenantsPage() {
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardContent className="p-0">
+      <Card className="w-full overflow-hidden">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

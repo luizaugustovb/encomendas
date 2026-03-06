@@ -139,9 +139,9 @@ export default function UnitsPage() {
         </div>
         <Dialog open={openCreate} onOpenChange={setOpenCreate}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Nova Unidade</Button>
+            <Button className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />Nova Unidade</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Cadastrar Unidade</DialogTitle>
               <DialogDescription>Preencha os dados da nova unidade</DialogDescription>
@@ -214,7 +214,7 @@ export default function UnitsPage() {
 
       {/* Edit Dialog */}
       <Dialog open={openEdit} onOpenChange={setOpenEdit}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Unidade</DialogTitle>
             <DialogDescription>Altere os dados da unidade</DialogDescription>
@@ -249,8 +249,8 @@ export default function UnitsPage() {
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardContent className="p-0">
+      <Card className="w-full overflow-hidden">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

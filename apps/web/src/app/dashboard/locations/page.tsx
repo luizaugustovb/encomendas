@@ -120,16 +120,16 @@ export default function LocationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Localizações</h1>
           <p className="text-muted-foreground">Gerencie os locais de armazenamento</p>
         </div>
         <Dialog open={openCreate} onOpenChange={setOpenCreate}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Nova Localização</Button>
+            <Button className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />Nova Localização</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Cadastrar Localização</DialogTitle>
               <DialogDescription>Defina um código e descrição para o local</DialogDescription>
@@ -164,7 +164,7 @@ export default function LocationsPage() {
 
       {/* Edit Dialog */}
       <Dialog open={openEdit} onOpenChange={setOpenEdit}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Localização</DialogTitle>
             <DialogDescription>Altere os dados da localização</DialogDescription>
@@ -183,8 +183,8 @@ export default function LocationsPage() {
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardContent className="p-0">
+      <Card className="w-full overflow-hidden">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

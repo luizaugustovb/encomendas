@@ -74,7 +74,7 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     if (!token) return;
-    api.getUnits(token).then((data: any) => setUnits(data || [])).catch(() => {});
+    api.getUnits(token).then((data: any) => setUnits(data || [])).catch(() => { });
   }, [token]);
 
   const loadLogs = useCallback(async () => {
@@ -123,16 +123,16 @@ export default function AuditLogsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Logs de Auditoria</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Logs de Auditoria</h1>
           <p className="text-sm text-muted-foreground">
             Registro detalhado de todas as movimentações de encomendas
           </p>
         </div>
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm hover:bg-accent"
+          className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm hover:bg-accent"
         >
           <Filter className="h-4 w-4" />
           Filtros
@@ -200,16 +200,16 @@ export default function AuditLogsPage() {
               />
             </div>
           </div>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
             <button
               onClick={loadLogs}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              className="w-full sm:w-auto rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               Aplicar
             </button>
             <button
               onClick={() => { setFilterCode(""); setFilterType(""); setFilterFrom(""); setFilterTo(""); setFilterUnitId(""); }}
-              className="rounded-md border px-4 py-2 text-sm hover:bg-accent"
+              className="w-full sm:w-auto rounded-md border px-4 py-2 text-sm hover:bg-accent"
             >
               Limpar
             </button>

@@ -39,7 +39,7 @@ export default function SettingsPage() {
     if (!token) return;
     loadConfig();
     if (isAdmin) {
-      api.getTenants(token).then(setTenants).catch(() => {});
+      api.getTenants(token).then(setTenants).catch(() => { });
     }
   }, [token]);
 
@@ -134,11 +134,10 @@ export default function SettingsPage() {
       {/* Message */}
       {message && (
         <div
-          className={`flex items-center gap-2 rounded-lg border p-4 ${
-            message.type === "success"
+          className={`flex items-center gap-2 rounded-lg border p-4 ${message.type === "success"
               ? "border-green-200 bg-green-50 text-green-800"
               : "border-red-200 bg-red-50 text-red-800"
-          }`}
+            }`}
         >
           {message.type === "success" ? (
             <CheckCircle className="h-5 w-5" />
@@ -195,10 +194,10 @@ export default function SettingsPage() {
           {isAdmin && (
             <div className="rounded-lg border bg-muted/50 p-4">
               <h3 className="mb-2 text-sm font-semibold">Teste de Disparo</h3>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="tel"
-                  className="flex-1 rounded-md border px-3 py-2 text-sm"
+                  className="w-full sm:flex-1 rounded-md border px-3 py-2 text-sm"
                   placeholder="Número de teste (ex: 5511999999999)"
                   value={testPhone}
                   onChange={(e) => setTestPhone(e.target.value)}
@@ -206,7 +205,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleTestWhatsapp}
                   disabled={testingWhatsapp || !testPhone}
-                  className="flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                  className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                 >
                   {testingWhatsapp ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -295,7 +294,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleTestHikvision}
                 disabled={testingHikvision}
-                className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {testingHikvision ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -332,11 +331,11 @@ export default function SettingsPage() {
       </div>
 
       {/* Save */}
-      <div className="flex justify-end">
+      <div className="flex flex-col sm:flex-row justify-end pt-4 pb-8">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Salvar Configurações
