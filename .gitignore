@@ -38,3 +38,12 @@ apps/api/prisma/migrations/
 *.tsbuildinfo
 api.log
 api-err.log
+
+# Binários
+*.exe
+
+# Scripts locais de bridge/ponte
+local-bridge.js
+instalar-ponte*.ps1
+ssh-*.js
+encomendas-bridge*
