@@ -92,6 +92,12 @@ function TotemContent() {
   useEffect(() => {
     enumerateDevices();
     startCameraWithRetry("environment").then(() => startQrScanning());
+
+    // Register Service Worker for PWA
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+
     return () => {
       if (inactivityRef.current) clearTimeout(inactivityRef.current);
       stopQrScanning();
