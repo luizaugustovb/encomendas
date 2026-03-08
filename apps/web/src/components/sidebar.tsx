@@ -10,9 +10,6 @@ import { useToast } from "@/components/ui/toast";
 import {
   Package,
   LayoutDashboard,
-  Users,
-  Building2,
-  MapPin,
   LogOut,
   Shield,
   Settings,
@@ -21,7 +18,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
-  Unlock,
   Wifi,
 } from "lucide-react";
 
@@ -75,9 +71,6 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
   { href: "/dashboard/deliveries", label: "Encomendas", icon: Package, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
-  { href: "/dashboard/users", label: "Usuários", icon: Users, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
-  { href: "/dashboard/units", label: "Unidades", icon: Building2, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
-  { href: "/dashboard/locations", label: "Localizações", icon: MapPin, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/tenants", label: "Condomínios", icon: Shield, roles: ["ADMIN"] },
   { href: "/dashboard/settings", label: "Configurações", icon: Settings, roles: ["ADMIN_CONDOMINIO"] },
   { href: "/dashboard/equipment", label: "Equipamentos", icon: Wifi, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
@@ -104,24 +97,6 @@ export function Sidebar() {
   };
 
   const { addToast } = useToast();
-  const [openingDoor, setOpeningDoor] = useState(false);
-
-  const handleOpenDoor = async () => {
-    if (!user || !["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO"].includes(user.role)) return;
-    setOpeningDoor(true);
-    try {
-      const result = await api.openDoor(token || localStorage.getItem("encomendas_token") || "", 1);
-      if (result?.success === false) {
-        addToast(result.message || "Erro ao abrir porta", "error");
-      } else {
-        addToast("Porta destravada, você pode sair agora", "success");
-      }
-    } catch (err: any) {
-      addToast(err.message || "Erro ao abrir porta", "error");
-    } finally {
-      setOpeningDoor(false);
-    }
-  };
 
   const sidebarContent = (
     <aside
@@ -206,20 +181,6 @@ export function Sidebar() {
           </div>
         )}
 
-        {user && ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO"].includes(user.role) && (
-          <button
-            onClick={handleOpenDoor}
-            disabled={openingDoor}
-            title={collapsed ? "Destravar Porta" : undefined}
-            className={cn(
-              "flex w-full items-center rounded-lg text-sm transition-colors hover:bg-green-500/20 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50",
-              collapsed ? "justify-center px-2 py-2.5" : "gap-2 px-3 py-2"
-            )}
-          >
-            <Unlock className={cn("shrink-0", collapsed ? "h-5 w-5" : "h-4 w-4")} />
-            {!collapsed && <span className="font-semibold">{openingDoor ? "Destravando..." : "Destravar Porta"}</span>}
-          </button>
-        )}
         <button
           onClick={logout}
           title={collapsed ? "Sair" : undefined}
