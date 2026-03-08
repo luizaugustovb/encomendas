@@ -22,6 +22,7 @@ import {
   PanelLeftOpen,
   X,
   Unlock,
+  Wifi,
 } from "lucide-react";
 
 // ===== Context para compartilhar estado da sidebar =====
@@ -79,7 +80,8 @@ const navItems = [
   { href: "/dashboard/locations", label: "Localizações", icon: MapPin, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/tenants", label: "Condomínios", icon: Shield, roles: ["ADMIN"] },
   { href: "/dashboard/settings", label: "Configurações", icon: Settings, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
-  { href: "/totem", label: "Totem", icon: Monitor, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO"] },
+  { href: "/dashboard/equipment", label: "Equipamentos", icon: Wifi, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
+  { href: "/totem", label: "Totem", icon: Monitor, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/audit", label: "Logs de Auditoria", icon: FileSearch, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
 ];
 
@@ -108,8 +110,12 @@ export function Sidebar() {
     if (!user || !["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO"].includes(user.role)) return;
     setOpeningDoor(true);
     try {
-      await api.openDoor(token || localStorage.getItem("encomendas_token") || "", 1);
-      addToast("Porta destravada, você pode sair agora", "success");
+      const result = await api.openDoor(token || localStorage.getItem("encomendas_token") || "", 1);
+      if (result?.success === false) {
+        addToast(result.message || "Erro ao abrir porta", "error");
+      } else {
+        addToast("Porta destravada, você pode sair agora", "success");
+      }
     } catch (err: any) {
       addToast(err.message || "Erro ao abrir porta", "error");
     } finally {

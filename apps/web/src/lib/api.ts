@@ -184,6 +184,26 @@ export const api = {
     return fetchApi(`/deliveries/audit/logs${qs ? `?${qs}` : ''}`, { token });
   },
 
+  // Equipment
+  getEquipments: (token: string) =>
+    fetchApi('/equipment', { token }),
+  getEquipmentStatus: (token: string) =>
+    fetchApi('/equipment/status', { token }),
+  getEquipment: (id: string, token: string) =>
+    fetchApi(`/equipment/${id}`, { token }),
+  createEquipment: (data: any, token: string) =>
+    fetchApi('/equipment', { method: 'POST', body: JSON.stringify(data), token }),
+  updateEquipment: (id: string, data: any, token: string) =>
+    fetchApi(`/equipment/${id}`, { method: 'PUT', body: JSON.stringify(data), token }),
+  deleteEquipment: (id: string, token: string) =>
+    fetchApi(`/equipment/${id}`, { method: 'DELETE', token }),
+  checkEquipmentOnline: (id: string, token: string) =>
+    fetchApi(`/equipment/${id}/status`, { token }),
+  openEquipmentDoor: (id: string, doorNo: number, token: string) =>
+    fetchApi(`/equipment/${id}/door/open`, { method: 'POST', body: JSON.stringify({ doorNo }), token }),
+  testEquipmentConnection: (id: string, token: string) =>
+    fetchApi(`/equipment/${id}/test`, { method: 'POST', token }),
+
   // Totem RTSP Config (público)
   totemGetRtspConfig: (tenantId: string) =>
     fetch(`/totem-api/config/${encodeURIComponent(tenantId)}/rtsp`).then(async (r) => {

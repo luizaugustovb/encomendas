@@ -14,6 +14,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { HikvisionModule } from './hikvision/hikvision.module';
 import { RedisModule } from './redis/redis.module';
 import { TenantConfigModule } from './tenant-config/tenant-config.module';
+import { EquipmentModule } from './equipment/equipment.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { TenantConfigModule } from './tenant-config/tenant-config.module';
     WhatsappModule,
     HikvisionModule,
     TenantConfigModule,
+    EquipmentModule,
   ],
   providers: [
     {

@@ -8,19 +8,20 @@ datasource db {
 }
 
 model Tenant {
-  id         String        @id @default(uuid())
-  name       String
-  document   String?
-  address    String?
-  phone      String?
-  active     Boolean       @default(true)
-  createdAt  DateTime      @default(now()) @map("created_at")
-  updatedAt  DateTime      @updatedAt @map("updated_at")
-  deliveries Delivery[]
-  locations  Location[]
-  config     TenantConfig?
-  units      Unit[]
-  users      User[]
+  id          String        @id @default(uuid())
+  name        String
+  document    String?
+  address     String?
+  phone       String?
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deliveries  Delivery[]
+  locations   Location[]
+  config      TenantConfig?
+  units       Unit[]
+  users       User[]
+  equipments  Equipment[]
 
   @@map("tenants")
 }
@@ -161,4 +162,24 @@ enum EventType {
   TOTEM_PHOTO_CAPTURED
   TOTEM_OTHER_RESIDENT
   DOOR_ACCESS
+}
+
+model Equipment {
+  id                String   @id @default(uuid())
+  tenantId          String   @map("tenant_id")
+  name              String
+  type              String   @default("HIKVISION")
+  hikvisionIp       String?  @map("hikvision_ip")
+  hikvisionPort     Int?     @default(80) @map("hikvision_port")
+  hikvisionUser     String?  @map("hikvision_user")
+  hikvisionPassword String?  @map("hikvision_password")
+  enabled           Boolean  @default(true)
+  doorCount         Int      @default(1) @map("door_count")
+  wireguardIp       String?  @map("wireguard_ip")
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("equipments")
 }
