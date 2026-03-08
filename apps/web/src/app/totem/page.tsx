@@ -462,8 +462,8 @@ function TotemContent() {
             {/* QR Frame overlay + Face Frame */}
             <div className="absolute inset-0 flex items-center justify-between px-[3%]">
               {/* Face frame - lado esquerdo (grande, circular) */}
-              <div className="relative flex flex-col items-center" style={{ marginLeft: "5%" }}>
-                <div className="relative h-[22rem] w-[22rem] rounded-full border-4 border-green-400 shadow-[0_0_40px_rgba(34,197,94,0.15)] lg:h-[28rem] lg:w-[28rem]">
+              <div className="relative flex flex-col items-center ml-[3%] lg:ml-[5%]">
+                <div className="relative h-[14rem] w-[14rem] md:h-[18rem] md:w-[18rem] lg:h-[22rem] lg:w-[22rem] xl:h-[28rem] xl:w-[28rem] rounded-full border-4 border-green-400 shadow-[0_0_40px_rgba(34,197,94,0.15)]">
                   <div className="absolute inset-0 flex items-center justify-center">
                     <UserCheck className="h-16 w-16 text-green-400/20" />
                   </div>
@@ -477,7 +477,7 @@ function TotemContent() {
 
               {/* QR Frame - lado direito */}
               <div className="relative">
-                <div className="relative h-56 w-56 rounded-2xl border-4 border-blue-400 shadow-[0_0_30px_rgba(59,130,246,0.3)] lg:h-72 lg:w-72">
+                <div className="relative h-36 w-36 md:h-44 md:w-44 lg:h-56 lg:w-56 xl:h-72 xl:w-72 rounded-2xl border-4 border-blue-400 shadow-[0_0_30px_rgba(59,130,246,0.3)]">
                   <div className="absolute -left-1 -top-1 h-8 w-8 rounded-tl-2xl border-l-4 border-t-4 border-blue-300" />
                   <div className="absolute -right-1 -top-1 h-8 w-8 rounded-tr-2xl border-r-4 border-t-4 border-blue-300" />
                   <div className="absolute -bottom-1 -left-1 h-8 w-8 rounded-bl-2xl border-b-4 border-l-4 border-blue-300" />

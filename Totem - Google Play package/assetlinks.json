@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.justicebox.totem",
+        "sha256_cert_fingerprints": ["6F:20:28:4A:A1:32:38:27:95:A7:A2:D3:A2:CB:7A:92:36:45:CE:B0:03:C2:A3:C3:38:B9:6A:9B:A3:A6:B5:ED"]
+      }
+    }]
