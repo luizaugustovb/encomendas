@@ -9,6 +9,8 @@ export class CreateTenantDto {
   @IsOptional() @IsString() document?: string;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() sindico?: string;
+  @IsOptional() @IsString() sindicoPhone?: string;
 }
 
 export class UpdateTenantDto {
@@ -16,6 +18,8 @@ export class UpdateTenantDto {
   @IsOptional() @IsString() document?: string;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() sindico?: string;
+  @IsOptional() @IsString() sindicoPhone?: string;
 }
 
 @Controller('tenants')

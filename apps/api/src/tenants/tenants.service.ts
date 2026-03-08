@@ -13,11 +13,11 @@ export class TenantsService {
     return this.prisma.tenant.findUnique({ where: { id } });
   }
 
-  async create(data: { name: string; document?: string; address?: string; phone?: string }) {
+  async create(data: { name: string; document?: string; address?: string; phone?: string; sindico?: string; sindicoPhone?: string }) {
     return this.prisma.tenant.create({ data });
   }
 
-  async update(id: string, data: { name?: string; document?: string; address?: string; phone?: string; active?: boolean }) {
+  async update(id: string, data: { name?: string; document?: string; address?: string; phone?: string; sindico?: string; sindicoPhone?: string; active?: boolean }) {
     return this.prisma.tenant.update({ where: { id }, data });
   }
 

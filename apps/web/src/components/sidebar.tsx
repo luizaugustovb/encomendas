@@ -79,7 +79,7 @@ const navItems = [
   { href: "/dashboard/units", label: "Unidades", icon: Building2, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/locations", label: "Localizações", icon: MapPin, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/tenants", label: "Condomínios", icon: Shield, roles: ["ADMIN"] },
-  { href: "/dashboard/settings", label: "Configurações", icon: Settings, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
+  { href: "/dashboard/settings", label: "Configurações", icon: Settings, roles: ["ADMIN_CONDOMINIO"] },
   { href: "/dashboard/equipment", label: "Equipamentos", icon: Wifi, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
   { href: "/totem", label: "Totem", icon: Monitor, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/audit", label: "Logs de Auditoria", icon: FileSearch, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
