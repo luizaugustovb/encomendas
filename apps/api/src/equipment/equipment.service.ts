@@ -23,8 +23,9 @@ export class EquipmentService {
    * se o tenant tem hikvisionEnabled mas nenhum Equipment cadastrado.
    */
   private async autoMigrateFromTenantConfig(tenantId: string): Promise<void> {
+    // Conta QUALQUER equipment (ativo ou inativo) para não re-migrar após exclusão
     const existing = await this.prisma.equipment.count({
-      where: { tenantId, active: true },
+      where: { tenantId },
     });
     if (existing > 0) return;
 
