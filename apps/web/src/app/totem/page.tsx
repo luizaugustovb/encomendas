@@ -663,9 +663,14 @@ function TotemContent() {
                   </div>
                 </div>
               ) : (
-                <p className="text-center text-xs text-slate-600">
-                  Sistema de retirada automática de encomendas
-                </p>
+                <a
+                  href="https://luizaugusto.me"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-center text-xs text-slate-600 transition-colors hover:text-slate-400"
+                >
+                  Desenvolvido por LAVB Tecnologias
+                </a>
               )}
             </div>
           </div>

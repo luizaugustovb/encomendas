@@ -34,7 +34,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary">
@@ -94,6 +94,16 @@ export default function LoginPage() {
           </form>
         </CardContent>
       </Card>
+      <footer className="mt-6">
+        <a
+          href="https://luizaugusto.me"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[11px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+        >
+          Desenvolvido por LAVB Tecnologias
+        </a>
+      </footer>
     </div>
   );
 }

@@ -37,6 +37,16 @@ export default function DashboardLayout({
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header />
           <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+          <footer className="shrink-0 border-t border-border/40 py-2 text-center">
+            <a
+              href="https://luizaugusto.me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+            >
+              Desenvolvido por LAVB Tecnologias
+            </a>
+          </footer>
         </div>
       </div>
     </SidebarProvider>

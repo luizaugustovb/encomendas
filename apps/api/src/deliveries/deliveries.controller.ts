@@ -131,7 +131,7 @@ export class DeliveriesController {
   @Roles('ADMIN', 'ADMIN_CONDOMINIO', 'PORTEIRO')
   async generateLabel(
     @Param('id') id: string,
-    @Query('format') format: 'a4' | 'thermal' = 'a4',
+    @Query('format') format: 'a4' | 'thermal' | 'sticker' = 'a4',
     @Res() res: Response,
   ) {
     const pdfBuffer = await this.deliveriesService.generateLabel(id, format);

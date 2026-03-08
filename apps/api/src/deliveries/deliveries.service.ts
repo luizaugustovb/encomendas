@@ -254,7 +254,7 @@ export class DeliveriesService {
     return updated;
   }
 
-  async generateLabel(id: string, format: 'a4' | 'thermal' = 'a4'): Promise<Buffer> {
+  async generateLabel(id: string, format: 'a4' | 'thermal' | 'sticker' = 'a4'): Promise<Buffer> {
     const delivery = await this.prisma.delivery.findUnique({
       where: { id },
       include: { user: true, unit: true, location: true },
@@ -265,8 +265,16 @@ export class DeliveriesService {
     if (format === 'thermal') {
       return this.generateThermalLabel(delivery);
     }
+    if (format === 'sticker') {
+      return this.generateStickerLabel(delivery);
+    }
 
+    // ===== FORMATO A4 =====
     const qrBuffer = await QRCode.toBuffer(delivery.code, { width: 300 });
+    const unitLabel = delivery.unit.block
+      ? `${delivery.unit.type} ${delivery.unit.number} - Bloco ${delivery.unit.block}`
+      : `${delivery.unit.type} ${delivery.unit.number}`;
+    const dateStr = delivery.createdAt.toLocaleString('pt-BR');
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -276,31 +284,39 @@ export class DeliveriesService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Title
-      doc.fontSize(24).font('Helvetica-Bold').text('ENCOMENDA', { align: 'center' });
-      doc.moveDown(0.5);
-      doc.fontSize(14).font('Helvetica').text(`Código: ${delivery.code}`, { align: 'center' });
+      const pw = doc.page.width - 100; // largura útil
+
+      // ── Título ──
+      doc.fontSize(28).font('Helvetica-Bold').text('ENCOMENDA', { align: 'center' });
+      doc.moveDown(0.8);
+
+      // ── Linha separadora ──
+      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).lineWidth(1).stroke('#999999');
+      doc.moveDown(0.8);
+
+      // ── Dados do morador (centralizados) ──
+      doc.fontSize(18).font('Helvetica-Bold').text(delivery.user.name, { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(14).font('Helvetica').text(unitLabel, { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(12).font('Helvetica').text(`Localização: ${delivery.location.code}${delivery.location.description ? ' - ' + delivery.location.description : ''}`, { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(11).font('Helvetica').text(`Cadastro: ${dateStr}`, { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(11).font('Helvetica').text(`Status: ${delivery.status === 'PENDING' ? 'PENDENTE' : 'RETIRADA'}`, { align: 'center' });
       doc.moveDown(1);
 
-      // QR Code
-      doc.image(qrBuffer, (doc.page.width - 200) / 2, doc.y, { width: 200, height: 200 });
-      doc.moveDown(12);
+      // ── Linha separadora ──
+      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).lineWidth(1).stroke('#999999');
+      doc.moveDown(1);
 
-      // Info
-      const unitLabel = delivery.unit.block
-        ? `${delivery.unit.type} ${delivery.unit.number} - Bloco ${delivery.unit.block}`
-        : `${delivery.unit.type} ${delivery.unit.number}`;
+      // ── Código da encomenda ──
+      doc.fontSize(16).font('Helvetica-Bold').text(delivery.code, { align: 'center' });
+      doc.moveDown(0.8);
 
-      doc.fontSize(16).font('Helvetica-Bold');
-      doc.text(`Morador: ${delivery.user.name}`, 50);
-      doc.moveDown(0.3);
-      doc.text(`Unidade: ${unitLabel}`);
-      doc.moveDown(0.3);
-      doc.text(`Localização: ${delivery.location.code} - ${delivery.location.description || ''}`);
-      doc.moveDown(0.3);
-      doc.text(`Data: ${delivery.createdAt.toLocaleString('pt-BR')}`);
-      doc.moveDown(0.3);
-      doc.text(`Status: ${delivery.status === 'PENDING' ? 'PENDENTE' : 'RETIRADA'}`);
+      // ── QR Code centralizado ──
+      const qrSize = 220;
+      doc.image(qrBuffer, (doc.page.width - qrSize) / 2, doc.y, { width: qrSize, height: qrSize });
 
       doc.end();
     });
@@ -310,13 +326,19 @@ export class DeliveriesService {
    * Gera etiqueta para impressora térmica 80mm (~226 pontos de largura)
    */
   private async generateThermalLabel(delivery: any): Promise<Buffer> {
-    // 80mm = ~226 pontos (72 DPI), altura variável
     const qrBuffer = await QRCode.toBuffer(delivery.code, { width: 160 });
+    const unitLabel = delivery.unit.block
+      ? `${delivery.unit.type} ${delivery.unit.number} - Bl ${delivery.unit.block}`
+      : `${delivery.unit.type} ${delivery.unit.number}`;
+    const dateStr = delivery.createdAt.toLocaleString('pt-BR');
+    const pw = 226;
+    const margin = 10;
+    const usable = pw - margin * 2;
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({
-        size: [226, 400],
-        margin: 10,
+        size: [pw, 450],
+        margin,
       });
       const chunks: Buffer[] = [];
 
@@ -324,36 +346,96 @@ export class DeliveriesService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Title
-      doc.fontSize(14).font('Helvetica-Bold').text('ENCOMENDA', { align: 'center' });
+      // ── Título ──
+      doc.fontSize(13).font('Helvetica-Bold').text('ENCOMENDA', { align: 'center', width: usable });
       doc.moveDown(0.3);
 
-      // QR Code centered
-      doc.image(qrBuffer, (226 - 140) / 2, doc.y, { width: 140, height: 140 });
-      doc.moveDown(8.5);
+      // ── Separador ──
+      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).dash(2, { space: 2 }).stroke();
+      doc.undash();
+      doc.moveDown(0.4);
 
-      // Code
-      doc.fontSize(8).font('Helvetica').text(delivery.code, { align: 'center' });
+      // ── Dados do morador (centralizados) ──
+      doc.fontSize(10).font('Helvetica-Bold').text(delivery.user.name, { align: 'center', width: usable });
+      doc.moveDown(0.15);
+      doc.fontSize(9).font('Helvetica').text(unitLabel, { align: 'center', width: usable });
+      doc.moveDown(0.15);
+      doc.fontSize(8).font('Helvetica').text(`Loc: ${delivery.location.code}${delivery.location.description ? ' - ' + delivery.location.description : ''}`, { align: 'center', width: usable });
+      doc.moveDown(0.15);
+      doc.fontSize(7).font('Helvetica').text(dateStr, { align: 'center', width: usable });
+      doc.moveDown(0.4);
+
+      // ── Separador ──
+      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).dash(2, { space: 2 }).stroke();
+      doc.undash();
+      doc.moveDown(0.4);
+
+      // ── Código ──
+      doc.fontSize(9).font('Helvetica-Bold').text(delivery.code, { align: 'center', width: usable });
       doc.moveDown(0.3);
 
-      // Separator
-      doc.moveTo(10, doc.y).lineTo(216, doc.y).dash(2, { space: 2 }).stroke();
-      doc.moveDown(0.3);
+      // ── QR Code centralizado ──
+      const qrSize = 140;
+      doc.image(qrBuffer, (pw - qrSize) / 2, doc.y, { width: qrSize, height: qrSize });
 
-      // Info
-      const unitLabel = delivery.unit.block
-        ? `${delivery.unit.type} ${delivery.unit.number} - Bl ${delivery.unit.block}`
-        : `${delivery.unit.type} ${delivery.unit.number}`;
+      doc.end();
+    });
+  }
 
-      doc.fontSize(9).font('Helvetica-Bold');
-      doc.text(delivery.user.name, 10, doc.y, { width: 206 });
+  /**
+   * Gera etiqueta adesiva estilo Mercado Livre (~100x150mm = 283x425 pontos)
+   */
+  private async generateStickerLabel(delivery: any): Promise<Buffer> {
+    const qrBuffer = await QRCode.toBuffer(delivery.code, { width: 240 });
+    const unitLabel = delivery.unit.block
+      ? `${delivery.unit.type} ${delivery.unit.number} - Bloco ${delivery.unit.block}`
+      : `${delivery.unit.type} ${delivery.unit.number}`;
+    const dateStr = delivery.createdAt.toLocaleString('pt-BR');
+    const pw = 283; // ~100mm
+    const ph = 425; // ~150mm
+    const margin = 14;
+    const usable = pw - margin * 2;
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({
+        size: [pw, ph],
+        margin,
+      });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // ── Título ──
+      doc.fontSize(16).font('Helvetica-Bold').text('ENCOMENDA', { align: 'center', width: usable });
+      doc.moveDown(0.4);
+
+      // ── Linha sólida ──
+      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).lineWidth(1).stroke('#333333');
+      doc.moveDown(0.5);
+
+      // ── Dados do morador (centralizados) ──
+      doc.fontSize(13).font('Helvetica-Bold').text(delivery.user.name, { align: 'center', width: usable });
       doc.moveDown(0.2);
-      doc.fontSize(8).font('Helvetica');
-      doc.text(`Un: ${unitLabel}`, 10);
+      doc.fontSize(11).font('Helvetica').text(unitLabel, { align: 'center', width: usable });
       doc.moveDown(0.2);
-      doc.text(`Loc: ${delivery.location.code}`, 10);
+      doc.fontSize(9).font('Helvetica').text(`Localização: ${delivery.location.code}${delivery.location.description ? ' - ' + delivery.location.description : ''}`, { align: 'center', width: usable });
       doc.moveDown(0.2);
-      doc.text(delivery.createdAt.toLocaleString('pt-BR'), 10);
+      doc.fontSize(8).font('Helvetica').text(dateStr, { align: 'center', width: usable });
+      doc.moveDown(0.5);
+
+      // ── Linha sólida ──
+      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).lineWidth(1).stroke('#333333');
+      doc.moveDown(0.5);
+
+      // ── Código da encomenda ──
+      doc.fontSize(11).font('Helvetica-Bold').text(delivery.code, { align: 'center', width: usable });
+      doc.moveDown(0.4);
+
+      // ── QR Code centralizado ──
+      const qrSize = 170;
+      doc.image(qrBuffer, (pw - qrSize) / 2, doc.y, { width: qrSize, height: qrSize });
 
       doc.end();
     });

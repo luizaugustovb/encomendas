@@ -119,7 +119,7 @@ export default function DeliveriesPage() {
     }
   };
 
-  const handleLabel = async (id: string, format: 'a4' | 'thermal' = 'a4') => {
+  const handleLabel = async (id: string, format: 'a4' | 'thermal' | 'sticker' = 'a4') => {
     if (!token) return;
     try {
       const blob = await api.getDeliveryLabel(id, token, format);
@@ -416,9 +416,17 @@ export default function DeliveriesPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => handleLabel(d.id, 'thermal')}
-                          title="Etiqueta 80mm"
+                          title="Cupom 80mm"
                         >
                           <Printer className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleLabel(d.id, 'sticker')}
+                          title="Etiqueta Adesiva"
+                        >
+                          <QrCode className="h-3 w-3" />
                         </Button>
                         <Button
                           size="sm"

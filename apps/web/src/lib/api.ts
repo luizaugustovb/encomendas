@@ -69,7 +69,7 @@ export const api = {
   },
   withdrawDelivery: (data: { userId: string; qrcode: string }, token: string) =>
     fetchApi('/deliveries/withdraw', { method: 'POST', body: JSON.stringify(data), token }),
-  getDeliveryLabel: (id: string, token: string, format: 'a4' | 'thermal' = 'a4') =>
+  getDeliveryLabel: (id: string, token: string, format: 'a4' | 'thermal' | 'sticker' = 'a4') =>
     fetch(`${API_URL}/deliveries/${id}/label?format=${format}`, {
       headers: { Authorization: `Bearer ${token}` },
     }).then((r) => r.blob()),
