@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { compressImage } from "@/lib/image-utils";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -127,15 +128,19 @@ export default function UsersPage() {
     }
   };
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>, mode: "create" | "edit") => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>, mode: "create" | "edit") => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Comprime a foto limitando a < 200KB
+    const compressedFile = await compressImage(file, 190); // 190 para ter margem segura < 200KB
+
     if (mode === "create") {
-      setFormPhoto(file);
-      setFormPhotoPreview(URL.createObjectURL(file));
+      setFormPhoto(compressedFile);
+      setFormPhotoPreview(URL.createObjectURL(compressedFile));
     } else {
-      setEditPhoto(file);
-      setEditPhotoPreview(URL.createObjectURL(file));
+      setEditPhoto(compressedFile);
+      setEditPhotoPreview(URL.createObjectURL(compressedFile));
     }
   };
 

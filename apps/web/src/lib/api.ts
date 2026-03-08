@@ -55,6 +55,8 @@ export const api = {
     fetchApi('/deliveries', { token }),
   getDelivery: (id: string, token: string) =>
     fetchApi(`/deliveries/${id}`, { token }),
+  openDoor: (token: string, doorNo: number = 1) =>
+    fetchApi('/hikvision/admin/door/open', { method: 'POST', body: JSON.stringify({ doorNo }), token }),
   createDelivery: (data: any, token: string) => {
     const formData = new FormData();
     formData.append('userId', data.userId);

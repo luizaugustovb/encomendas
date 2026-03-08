@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { compressImage } from "@/lib/image-utils";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,11 +66,12 @@ export default function DeliveriesPage() {
     loadData();
   }, [token]);
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setFormPhoto(file);
-    setFormPhotoPreview(URL.createObjectURL(file));
+    const compressed = await compressImage(file, 190);
+    setFormPhoto(compressed);
+    setFormPhotoPreview(URL.createObjectURL(compressed));
   };
 
   const handleCreate = async (e: React.FormEvent) => {

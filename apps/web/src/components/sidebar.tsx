@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 import {
   Package,
   LayoutDashboard,
@@ -19,6 +21,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
+  Unlock,
 } from "lucide-react";
 
 // ===== Context para compartilhar estado da sidebar =====
@@ -83,7 +86,7 @@ const navItems = [
 // ===== Sidebar Component =====
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const [logoError, setLogoError] = useState(false);
   const { collapsed, setCollapsed, mobileOpen, setMobileOpen } = useSidebar();
 
@@ -95,6 +98,22 @@ export function Sidebar() {
     // Fecha sidebar mobile ao navegar
     if (window.innerWidth < 768) {
       setMobileOpen(false);
+    }
+  };
+
+  const { addToast } = useToast();
+  const [openingDoor, setOpeningDoor] = useState(false);
+
+  const handleOpenDoor = async () => {
+    if (!user || !["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO"].includes(user.role)) return;
+    setOpeningDoor(true);
+    try {
+      await api.openDoor(token || localStorage.getItem("encomendas_token") || "", 1);
+      addToast("Porta destravada, você pode sair agora", "success");
+    } catch (err: any) {
+      addToast(err.message || "Erro ao abrir porta", "error");
+    } finally {
+      setOpeningDoor(false);
     }
   };
 
@@ -172,13 +191,28 @@ export function Sidebar() {
       </nav>
 
       {/* User info */}
-      <div className="border-t p-2 shrink-0">
+      <div className="border-t p-2 shrink-0 space-y-2">
         {!collapsed && (
           <div className="mb-2 px-2">
             <p className="text-sm font-medium truncate">{user?.name}</p>
             <p className="text-xs text-muted-foreground truncate">{user?.tenantName}</p>
             <p className="text-xs text-muted-foreground capitalize truncate">{user?.role?.toLowerCase().replace('_', ' ')}</p>
           </div>
+        )}
+
+        {user && ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO"].includes(user.role) && (
+          <button
+            onClick={handleOpenDoor}
+            disabled={openingDoor}
+            title={collapsed ? "Destravar Porta" : undefined}
+            className={cn(
+              "flex w-full items-center rounded-lg text-sm transition-colors hover:bg-green-500/20 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50",
+              collapsed ? "justify-center px-2 py-2.5" : "gap-2 px-3 py-2"
+            )}
+          >
+            <Unlock className={cn("shrink-0", collapsed ? "h-5 w-5" : "h-4 w-4")} />
+            {!collapsed && <span className="font-semibold">{openingDoor ? "Destravando..." : "Destravar Porta"}</span>}
+          </button>
         )}
         <button
           onClick={logout}

@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { compressImage } from "@/lib/image-utils";
 import jsQR from "jsqr";
 import {
   Package, QrCode, Camera, CheckCircle, XCircle,
@@ -405,10 +406,14 @@ function TotemContent() {
     try {
       const photos: File[] = [];
       if (capturedFaceBlob) {
-        photos.push(new File([capturedFaceBlob], "face.jpg", { type: "image/jpeg" }));
+        let file = new File([capturedFaceBlob], "face.jpg", { type: "image/jpeg" });
+        file = await compressImage(file, 190);
+        photos.push(file);
       }
       if (capturedPackageBlob) {
-        photos.push(new File([capturedPackageBlob], "package.jpg", { type: "image/jpeg" }));
+        let file = new File([capturedPackageBlob], "package.jpg", { type: "image/jpeg" });
+        file = await compressImage(file, 190);
+        photos.push(file);
       }
       const withdrawnById = selectedResident?.id;
       await api.totemWithdraw(delivery.code, photos, withdrawnById);
