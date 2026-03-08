@@ -18,16 +18,62 @@ export class EquipmentService {
 
   // ─── CRUD ──────────────────────────────────────────────────────────
 
+  /**
+   * Migra automaticamente o TenantConfig Hikvision para a tabela Equipment
+   * se o tenant tem hikvisionEnabled mas nenhum Equipment cadastrado.
+   */
+  private async autoMigrateFromTenantConfig(tenantId: string): Promise<void> {
+    const existing = await this.prisma.equipment.count({
+      where: { tenantId, active: true },
+    });
+    if (existing > 0) return;
+
+    const config = await this.prisma.tenantConfig.findUnique({
+      where: { tenantId },
+    });
+    if (!config || !config.hikvisionEnabled || !config.hikvisionIp) return;
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { name: true },
+    });
+
+    await this.prisma.equipment.create({
+      data: {
+        tenantId,
+        name: `Hikvision - ${tenant?.name || 'Principal'}`,
+        type: 'HIKVISION',
+        hikvisionIp: config.hikvisionIp,
+        hikvisionPort: config.hikvisionPort || 80,
+        hikvisionUser: config.hikvisionUser || 'admin',
+        hikvisionPassword: config.hikvisionPassword || '',
+        doorCount: 1,
+        enabled: true,
+      },
+    });
+
+    this.logger.log(`Auto-migrado equipamento do TenantConfig para tenant ${tenantId}`);
+  }
+
   async findAll(userTenantId: string, role: string) {
     if (role === 'ADMIN') {
-      // Admin master vê todos os equipamentos agrupados por condomínio
+      // Auto-migrar para todos os tenants que têm config mas não têm equipment
+      const tenants = await this.prisma.tenant.findMany({
+        where: { active: true },
+        select: { id: true },
+      });
+      await Promise.all(tenants.map((t) => this.autoMigrateFromTenantConfig(t.id)));
+
       return this.prisma.equipment.findMany({
         where: { active: true },
         include: { tenant: { select: { id: true, name: true } } },
         orderBy: [{ tenant: { name: 'asc' } }, { name: 'asc' }],
       });
     }
-    // Outros roles vêem apenas do seu condomínio
+
+    // Auto-migrar para o tenant do usuário
+    await this.autoMigrateFromTenantConfig(userTenantId);
+
     return this.prisma.equipment.findMany({
       where: { tenantId: userTenantId, active: true },
       include: { tenant: { select: { id: true, name: true } } },
