@@ -12,8 +12,10 @@ export class UsersService {
     const where: any = {};
     if (isAdmin && filterTenantId) {
       where.tenantId = filterTenantId;
+      where.role = { not: 'ADMIN' };
     } else if (!isAdmin) {
       where.tenantId = tenantId;
+      where.role = { not: 'ADMIN' };
     }
     return this.prisma.user.findMany({
       where,
