@@ -11,6 +11,10 @@ import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { HikvisionService } from '../hikvision/hikvision.service';
 import axios from 'axios';
 import { Response } from 'express';
+import { execFile } from 'child_process';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { readFile as fsReadFile, unlink } from 'fs';
 
 export class UpdateTenantConfigDto {
   @IsOptional() @IsString() whatsappToken?: string;
@@ -100,7 +104,8 @@ export class TenantConfigController {
   // Test RTSP Camera
   @Post('test/rtsp')
   @Roles('ADMIN', 'ADMIN_CONDOMINIO')
-  async testRtsp(@TenantId() tenantId: string) {
+  async testRtsp(@TenantId() jwtTenantId: string, @CurrentUser() user: any, @Body() body?: { tenantId?: string }) {
+    const tenantId = (user.role === 'ADMIN' && body?.tenantId) ? body.tenantId : jwtTenantId;
     const config = await this.configService.findByTenantId(tenantId);
     if (!config?.rtspCameraUrl) {
       return { success: false, message: 'URL da câmera RTSP não configurada', ping: null, hasImage: false };
@@ -114,15 +119,42 @@ export class TenantConfigController {
 
     try {
       const start = Date.now();
-      const response = await axios.get(url, {
-        timeout: 10000,
-        responseType: 'arraybuffer',
-        maxContentLength: 5 * 1024 * 1024,
-        headers: { 'Accept': 'image/jpeg, multipart/x-mixed-replace, */*' },
-      });
-      ping = Date.now() - start;
-      contentType = response.headers['content-type'] || '';
-      hasImage = response.status === 200 && response.data?.length > 0;
+
+      if (url.startsWith('rtsp://')) {
+        // Para RTSP, testar capturando um frame com ffmpeg
+        const tmpFile = join(tmpdir(), `rtsp-test-${Date.now()}.jpg`);
+        await new Promise<void>((resolve, reject) => {
+          execFile('ffmpeg', [
+            '-rtsp_transport', 'tcp',
+            '-i', url,
+            '-frames:v', '1',
+            '-q:v', '5',
+            '-y', tmpFile,
+          ], { timeout: 15000 }, (err) => {
+            if (err) reject(err); else resolve();
+          });
+        });
+        ping = Date.now() - start;
+        // Verificar se o arquivo foi criado
+        const { statSync } = require('fs');
+        try {
+          const stat = statSync(tmpFile);
+          hasImage = stat.size > 0;
+          contentType = 'image/jpeg (via ffmpeg)';
+        } catch { hasImage = false; }
+        unlink(tmpFile, () => {});
+      } else {
+        // Para HTTP, testar com axios
+        const response = await axios.get(url, {
+          timeout: 10000,
+          responseType: 'arraybuffer',
+          maxContentLength: 5 * 1024 * 1024,
+          headers: { 'Accept': 'image/jpeg, multipart/x-mixed-replace, */*' },
+        });
+        ping = Date.now() - start;
+        contentType = response.headers['content-type'] || '';
+        hasImage = response.status === 200 && response.data?.length > 0;
+      }
     } catch (err: any) {
       if (err.code === 'ECONNREFUSED') {
         errorMsg = 'Conexão recusada - verifique o IP e a porta';
@@ -149,9 +181,15 @@ export class TenantConfigController {
   @Get('rtsp-proxy')
   @Roles('ADMIN', 'ADMIN_CONDOMINIO')
   async rtspProxyAuth(
-    @TenantId() tenantId: string,
+    @TenantId() jwtTenantId: string,
+    @CurrentUser() user: any,
     @Res() res: Response,
+    @Body() body?: any,
   ) {
+    // Para ADMIN, aceita tenantId via query string
+    const req = (res as any).req;
+    const queryTenantId = req?.query?.tenantId;
+    const tenantId = (user.role === 'ADMIN' && queryTenantId) ? queryTenantId : jwtTenantId;
     const config = await this.configService.findByTenantId(tenantId);
     if (!config?.rtspCameraUrl) {
       res.status(404).json({ message: 'Câmera não configurada' });
@@ -159,7 +197,33 @@ export class TenantConfigController {
     }
 
     try {
-      const response = await axios.get(config.rtspCameraUrl, {
+      const cameraUrl = config.rtspCameraUrl;
+
+      // Se for URL RTSP, capturar frame com ffmpeg
+      if (cameraUrl.startsWith('rtsp://')) {
+        const tmpFile = join(tmpdir(), `rtsp-snap-${Date.now()}.jpg`);
+        await new Promise<void>((resolve, reject) => {
+          execFile('ffmpeg', [
+            '-rtsp_transport', 'tcp',
+            '-i', cameraUrl,
+            '-frames:v', '1',
+            '-q:v', '5',
+            '-y', tmpFile,
+          ], { timeout: 10000 }, (err) => {
+            if (err) reject(err); else resolve();
+          });
+        });
+        fsReadFile(tmpFile, (err, data) => {
+          unlink(tmpFile, () => {});
+          if (err) { res.status(502).json({ message: 'Falha ao ler snapshot' }); return; }
+          res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+          res.send(data);
+        });
+        return;
+      }
+
+      // Se for HTTP, fazer proxy direto
+      const response = await axios.get(cameraUrl, {
         responseType: 'stream',
         timeout: 10000,
         headers: { 'Accept': 'image/jpeg, multipart/x-mixed-replace, */*' },

@@ -35,6 +35,9 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# ffmpeg para captura de snapshots RTSP
+RUN apk add --no-cache ffmpeg
+
 # Copy production node_modules (without dev deps)
 COPY --from=deps /app/node_modules ./node_modules
 # Copy compiled output

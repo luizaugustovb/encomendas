@@ -11,6 +11,10 @@ import { TenantConfigService } from '../tenant-config/tenant-config.service';
 import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 import { Response } from 'express';
 import axios from 'axios';
+import { execFile } from 'child_process';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { readFile as fsReadFile, unlink } from 'fs';
 
 export class TotemWithdrawDto {
   @IsString() @IsNotEmpty() code: string;
@@ -53,6 +57,30 @@ export class TotemController {
     }
 
     try {
+      // Se for URL RTSP, capturar frame com ffmpeg
+      if (rtspCameraUrl.startsWith('rtsp://')) {
+        const tmpFile = join(tmpdir(), `rtsp-snap-${Date.now()}.jpg`);
+        await new Promise<void>((resolve, reject) => {
+          const proc = execFile('ffmpeg', [
+            '-rtsp_transport', 'tcp',
+            '-i', rtspCameraUrl,
+            '-frames:v', '1',
+            '-q:v', '5',
+            '-y', tmpFile,
+          ], { timeout: 10000 }, (err) => {
+            if (err) reject(err); else resolve();
+          });
+        });
+        fsReadFile(tmpFile, (err, data) => {
+          unlink(tmpFile, () => {});
+          if (err) { res.status(502).json({ message: 'Falha ao ler snapshot' }); return; }
+          res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+          res.send(data);
+        });
+        return;
+      }
+
+      // Se for HTTP, fazer proxy direto
       const response = await axios.get(rtspCameraUrl, {
         responseType: 'stream',
         timeout: 10000,

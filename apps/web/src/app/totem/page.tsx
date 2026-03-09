@@ -40,6 +40,54 @@ export default function TotemPage() {
   );
 }
 
+// Componente de câmera com refresh automático (snapshot RTSP via proxy)
+function CameraFeed({ url }: { url: string }) {
+  const [imgSrc, setImgSrc] = useState(`${url}?t=${Date.now()}`);
+  const [hasError, setHasError] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Recarregar snapshot a cada 2 segundos
+    intervalRef.current = setInterval(() => {
+      setImgSrc(`${url}?t=${Date.now()}`);
+    }, 2000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [url]);
+
+  return (
+    <>
+      <div className="h-4 w-px bg-slate-700" />
+      <div className="w-full rounded-xl border border-slate-700 bg-slate-800/60 p-3">
+        <div className="mb-2 flex items-center justify-center gap-2">
+          <Shield className="h-4 w-4 text-red-400" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-red-400">
+            Ambiente Monitorado
+          </span>
+        </div>
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+          {!hasError ? (
+            <img
+              src={imgSrc}
+              alt="Câmera de monitoramento"
+              className="h-full w-full object-cover"
+              onError={() => setHasError(true)}
+              onLoad={() => setHasError(false)}
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-slate-500">
+              <Camera className="h-8 w-8" />
+            </div>
+          )}
+          <div className="absolute left-2 top-2 flex items-center gap-1">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+            <span className="text-[10px] font-medium text-red-400">REC</span>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function TotemContent() {
   const searchParams = useSearchParams();
   const tenantId = searchParams.get("tenant") || "";
@@ -605,35 +653,7 @@ function TotemContent() {
 
               {/* Ambiente Monitorado - RTSP Camera */}
               {rtspCameraUrl && (
-                <>
-                  <div className="h-4 w-px bg-slate-700" />
-                  <div className="w-full rounded-xl border border-slate-700 bg-slate-800/60 p-3">
-                    <div className="mb-2 flex items-center justify-center gap-2">
-                      <Shield className="h-4 w-4 text-red-400" />
-                      <span className="text-xs font-semibold uppercase tracking-wider text-red-400">
-                        Ambiente Monitorado
-                      </span>
-                    </div>
-                    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
-                      <img
-                        src={rtspCameraUrl}
-                        alt="Câmera de monitoramento"
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                          (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
-                        }}
-                      />
-                      <div className="hidden absolute inset-0 flex items-center justify-center text-slate-500">
-                        <Camera className="h-8 w-8" />
-                      </div>
-                      <div className="absolute left-2 top-2 flex items-center gap-1">
-                        <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                        <span className="text-[10px] font-medium text-red-400">REC</span>
-                      </div>
-                    </div>
-                  </div>
-                </>
+                <CameraFeed url={rtspCameraUrl} />
               )}
             </div>
 

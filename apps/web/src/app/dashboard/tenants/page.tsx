@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import {
   Plus, Trash2, Pencil, RotateCcw, AlertTriangle, Settings, ArrowLeft,
-  Phone, Wifi, WifiOff, Video, Save, TestTube2, Loader2,
+  Phone, Wifi, WifiOff, Video, Save, TestTube2, Loader2, Signal,
   CheckCircle, XCircle, Users, Building2, MapPin, Camera, UserCircle, PlusCircle,
 } from "lucide-react";
 
@@ -320,6 +320,125 @@ function TenantConfigView({ tenant, token, onBack }: { tenant: any; token: strin
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// Componente: Teste de Câmera RTSP (página Condomínios)
+// ═══════════════════════════════════════════════════════════════════
+
+function RtspTestSectionTenants({ token, url, tenantId }: { token: string; url: string; tenantId: string }) {
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  const handleTest = async () => {
+    setTesting(true);
+    setResult(null);
+    setShowPreview(false);
+    setPreviewError(false);
+    setPreviewUrl(null);
+    try {
+      const res = await api.testRtsp(token, tenantId);
+      setResult(res);
+      if (res.success) {
+        setShowPreview(true);
+        loadPreviewImage();
+      }
+    } catch (err: any) {
+      setResult({ success: false, message: err.message || "Erro ao testar" });
+    }
+    setTesting(false);
+  };
+
+  const loadPreviewImage = async () => {
+    setLoadingPreview(true);
+    setPreviewError(false);
+    try {
+      const res = await fetch(`/api/tenant-config/rtsp-proxy?tenantId=${encodeURIComponent(tenantId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Falha");
+      const blob = await res.blob();
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch {
+      setPreviewError(true);
+    }
+    setLoadingPreview(false);
+  };
+
+  return (
+    <div className="rounded-lg border bg-muted/50 p-4">
+      <h3 className="mb-3 text-sm font-semibold">Teste de Conectividade</h3>
+
+      <div className="flex flex-col sm:flex-row gap-2 mb-3">
+        <button
+          onClick={handleTest}
+          disabled={testing || !url}
+          className="flex items-center justify-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+        >
+          {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
+          {testing ? "Testando..." : "Testar Câmera"}
+        </button>
+        {!url && <span className="text-xs text-muted-foreground self-center">Salve a URL primeiro</span>}
+      </div>
+
+      {result && (
+        <div className={`mb-3 flex items-center gap-2 rounded-lg border p-3 text-sm ${
+          result.success
+            ? "border-green-200 bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
+            : "border-red-200 bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"
+        }`}>
+          {result.success ? <CheckCircle className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+          <div>
+            <p className="font-medium">{result.message}</p>
+            {result.ping !== null && result.ping !== undefined && (
+              <p className="text-xs opacity-75">Ping: {result.ping}ms · Tipo: {result.contentType || "N/A"}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showPreview && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Preview da câmera (via proxy)</span>
+            <button
+              onClick={loadPreviewImage}
+              disabled={loadingPreview}
+              className="text-xs text-purple-500 hover:underline flex items-center gap-1"
+            >
+              {loadingPreview ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />} Recarregar
+            </button>
+          </div>
+          <div className="relative aspect-video w-full max-w-lg overflow-hidden rounded-lg bg-black border">
+            {loadingPreview && !previewUrl && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+              </div>
+            )}
+            {previewUrl && !previewError && (
+              <img
+                src={previewUrl}
+                alt="Preview câmera"
+                className="h-full w-full object-contain"
+                onError={() => setPreviewError(true)}
+              />
+            )}
+            {previewError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 gap-2">
+                <Camera className="h-8 w-8 opacity-50" />
+                <span className="text-xs">Falha ao carregar imagem</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // TAB: Configurações (WhatsApp, Equipamentos, RTSP)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -347,6 +466,8 @@ function ConfigTabContent({ tenant, token }: { tenant: any; token: string }) {
   const [eqDoorCount, setEqDoorCount] = useState("1");
   const [eqWireguardIp, setEqWireguardIp] = useState("");
   const [eqEnabled, setEqEnabled] = useState(true);
+  const [testingHikEqId, setTestingHikEqId] = useState<string | null>(null);
+  const [hikTestResult, setHikTestResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
 
   useEffect(() => { loadConfig(); loadEquipments(); }, []);
 
@@ -391,6 +512,16 @@ function ConfigTabContent({ tenant, token }: { tenant: any; token: string }) {
     if (!deletingEqId) return;
     try { await api.deleteEquipment(deletingEqId, token); addToast("Equipamento removido", "success"); setOpenDeleteEq(false); setDeletingEqId(null); loadEquipments(); }
     catch (err: any) { addToast(err.message || "Erro ao remover", "error"); }
+  }
+  async function handleTestHikvision(eqId: string) {
+    setTestingHikEqId(eqId); setHikTestResult(null);
+    try {
+      const r = await api.testHikvision(token, tenant.id);
+      setHikTestResult({ id: eqId, success: r.success, message: r.message || (r.success ? 'Conexão OK' : 'Falha') });
+    } catch (err: any) {
+      setHikTestResult({ id: eqId, success: false, message: err.message || 'Erro ao testar' });
+    }
+    setTestingHikEqId(null);
   }
 
   if (loading) return <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -442,9 +573,17 @@ function ConfigTabContent({ tenant, token }: { tenant: any; token: string }) {
                   <p className="text-xs text-muted-foreground mt-0.5">{eq.hikvisionIp || "IP não configurado"}{eq.hikvisionPort && eq.hikvisionPort !== 80 ? `:${eq.hikvisionPort}` : ""}{" · "}{eq.doorCount} porta{eq.doorCount > 1 ? "s" : ""}{eq.wireguardIp ? ` · WG: ${eq.wireguardIp}` : ""}</p>
                 </div>
                 <div className="flex gap-1 shrink-0">
+                  <Button size="sm" variant="ghost" title="Testar conexão" onClick={() => handleTestHikvision(eq.id)} disabled={testingHikEqId === eq.id}>
+                    {testingHikEqId === eq.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Signal className="h-3.5 w-3.5" />}
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={() => handleEditEq(eq)}><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => { setDeletingEqId(eq.id); setOpenDeleteEq(true); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
+                {hikTestResult?.id === eq.id && (
+                  <div className={`w-full mt-1 flex items-center gap-1.5 rounded px-2 py-1 text-xs ${hikTestResult.success ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'}`}>
+                    {hikTestResult.success ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />} {hikTestResult.message}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -473,8 +612,11 @@ function ConfigTabContent({ tenant, token }: { tenant: any; token: string }) {
       {/* Câmera RTSP */}
       <div className="rounded-lg border bg-card p-6">
         <div className="mb-4 flex items-center gap-2"><Video className="h-5 w-5 text-purple-600" /><h2 className="text-lg font-semibold">Câmera RTSP (Totem)</h2></div>
-        <p className="mb-4 text-sm text-muted-foreground">URL da câmera para exibição no totem.</p>
-        <div><label className="mb-1 block text-sm font-medium">URL da Câmera</label><input type="text" className="w-full rounded-md border px-3 py-2 bg-background" placeholder="http://192.168.1.100/ISAPI/Streaming/channels/101/httpPreview" value={config.rtspCameraUrl || ""} onChange={(e) => setConfig({ ...config, rtspCameraUrl: e.target.value })} /></div>
+        <p className="mb-4 text-sm text-muted-foreground">URL HTTP da câmera para exibir feed ao vivo no totem. Aceita MJPEG stream ou snapshot JPEG.</p>
+        <div className="space-y-4">
+          <div><label className="mb-1 block text-sm font-medium">URL da Câmera</label><input type="text" className="w-full rounded-md border px-3 py-2 bg-background" placeholder="http://192.168.1.100/ISAPI/Streaming/channels/101/httpPreview" value={config.rtspCameraUrl || ""} onChange={(e) => setConfig({ ...config, rtspCameraUrl: e.target.value })} /></div>
+          <RtspTestSectionTenants token={token} url={config.rtspCameraUrl || ""} tenantId={tenant.id} />
+        </div>
       </div>
 
       <div className="flex justify-end pt-4 pb-8">
