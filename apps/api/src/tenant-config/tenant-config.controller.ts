@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Put, Body, Param, Post, Res,
+  Controller, Get, Put, Body, Param, Post, Res, Query,
   UseGuards,
 } from '@nestjs/common';
 import { TenantConfigService } from './tenant-config.service';
@@ -14,7 +14,8 @@ import { Response } from 'express';
 import { execFile } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { readFile as fsReadFile, unlink } from 'fs';
+import { unlink } from 'fs';
+import { readFile as fsReadFile } from 'fs/promises';
 
 export class UpdateTenantConfigDto {
   @IsOptional() @IsString() whatsappToken?: string;
@@ -184,11 +185,8 @@ export class TenantConfigController {
     @TenantId() jwtTenantId: string,
     @CurrentUser() user: any,
     @Res() res: Response,
-    @Body() body?: any,
+    @Query('tenantId') queryTenantId?: string,
   ) {
-    // Para ADMIN, aceita tenantId via query string
-    const req = (res as any).req;
-    const queryTenantId = req?.query?.tenantId;
     const tenantId = (user.role === 'ADMIN' && queryTenantId) ? queryTenantId : jwtTenantId;
     const config = await this.configService.findByTenantId(tenantId);
     if (!config?.rtspCameraUrl) {
@@ -201,7 +199,7 @@ export class TenantConfigController {
 
       // Se for URL RTSP, capturar frame com ffmpeg
       if (cameraUrl.startsWith('rtsp://')) {
-        const tmpFile = join(tmpdir(), `rtsp-snap-${Date.now()}.jpg`);
+        const tmpFile = join(tmpdir(), `rtsp-snap-proxy-${Date.now()}.jpg`);
         await new Promise<void>((resolve, reject) => {
           execFile('ffmpeg', [
             '-rtsp_transport', 'tcp',
@@ -209,16 +207,14 @@ export class TenantConfigController {
             '-frames:v', '1',
             '-q:v', '5',
             '-y', tmpFile,
-          ], { timeout: 10000 }, (err) => {
+          ], { timeout: 15000 }, (err) => {
             if (err) reject(err); else resolve();
           });
         });
-        fsReadFile(tmpFile, (err, data) => {
-          unlink(tmpFile, () => {});
-          if (err) { res.status(502).json({ message: 'Falha ao ler snapshot' }); return; }
-          res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
-          res.send(data);
-        });
+        const data = await fsReadFile(tmpFile);
+        unlink(tmpFile, () => {});
+        res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+        res.send(data);
         return;
       }
 

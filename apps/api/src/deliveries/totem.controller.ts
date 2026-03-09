@@ -14,7 +14,8 @@ import axios from 'axios';
 import { execFile } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { readFile as fsReadFile, unlink } from 'fs';
+import { readFile as fsReadFile } from 'fs/promises';
+import { unlink } from 'fs';
 
 export class TotemWithdrawDto {
   @IsString() @IsNotEmpty() code: string;
@@ -61,22 +62,20 @@ export class TotemController {
       if (rtspCameraUrl.startsWith('rtsp://')) {
         const tmpFile = join(tmpdir(), `rtsp-snap-${Date.now()}.jpg`);
         await new Promise<void>((resolve, reject) => {
-          const proc = execFile('ffmpeg', [
+          execFile('ffmpeg', [
             '-rtsp_transport', 'tcp',
             '-i', rtspCameraUrl,
             '-frames:v', '1',
             '-q:v', '5',
             '-y', tmpFile,
-          ], { timeout: 10000 }, (err) => {
+          ], { timeout: 15000 }, (err) => {
             if (err) reject(err); else resolve();
           });
         });
-        fsReadFile(tmpFile, (err, data) => {
-          unlink(tmpFile, () => {});
-          if (err) { res.status(502).json({ message: 'Falha ao ler snapshot' }); return; }
-          res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
-          res.send(data);
-        });
+        const data = await fsReadFile(tmpFile);
+        unlink(tmpFile, () => {});
+        res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+        res.send(data);
         return;
       }
 
