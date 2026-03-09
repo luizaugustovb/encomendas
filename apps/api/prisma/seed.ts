@@ -31,7 +31,7 @@ async function main() {
   });
 
   // Create master admin
-  const hashedPassword = await bcrypt.hash('Luiz2012@...', 10);
+  const hashedPassword = await bcrypt.hash('Luiz2012@', 10);
   const masterAdmin = await prisma.user.upsert({
     where: { email: 'contato@luizaugusto.me' },
     update: {},

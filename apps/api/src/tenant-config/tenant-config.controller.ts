@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Put, Body, Param, Post,
+  Controller, Get, Put, Body, Param, Post, Res,
   UseGuards,
 } from '@nestjs/common';
 import { TenantConfigService } from './tenant-config.service';
@@ -9,6 +9,8 @@ import { TenantId, CurrentUser } from '../auth/decorators';
 import { IsOptional, IsString, IsNumber, IsBoolean } from 'class-validator';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { HikvisionService } from '../hikvision/hikvision.service';
+import axios from 'axios';
+import { Response } from 'express';
 
 export class UpdateTenantConfigDto {
   @IsOptional() @IsString() whatsappToken?: string;
@@ -93,5 +95,86 @@ export class TenantConfigController {
       password: config.password || '',
     });
     return result;
+  }
+
+  // Test RTSP Camera
+  @Post('test/rtsp')
+  @Roles('ADMIN', 'ADMIN_CONDOMINIO')
+  async testRtsp(@TenantId() tenantId: string) {
+    const config = await this.configService.findByTenantId(tenantId);
+    if (!config?.rtspCameraUrl) {
+      return { success: false, message: 'URL da câmera RTSP não configurada', ping: null, hasImage: false };
+    }
+
+    const url = config.rtspCameraUrl;
+    let ping: number | null = null;
+    let hasImage = false;
+    let contentType = '';
+    let errorMsg = '';
+
+    try {
+      const start = Date.now();
+      const response = await axios.get(url, {
+        timeout: 10000,
+        responseType: 'arraybuffer',
+        maxContentLength: 5 * 1024 * 1024,
+        headers: { 'Accept': 'image/jpeg, multipart/x-mixed-replace, */*' },
+      });
+      ping = Date.now() - start;
+      contentType = response.headers['content-type'] || '';
+      hasImage = response.status === 200 && response.data?.length > 0;
+    } catch (err: any) {
+      if (err.code === 'ECONNREFUSED') {
+        errorMsg = 'Conexão recusada - verifique o IP e a porta';
+      } else if (err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED') {
+        errorMsg = 'Timeout - câmera não respondeu em 10s';
+      } else if (err.code === 'ENOTFOUND') {
+        errorMsg = 'Host não encontrado - verifique a URL';
+      } else {
+        errorMsg = err.message || 'Erro desconhecido';
+      }
+    }
+
+    return {
+      success: hasImage,
+      message: hasImage ? `Câmera acessível (${ping}ms)` : (errorMsg || 'Câmera não retornou imagem'),
+      ping,
+      hasImage,
+      contentType,
+      url,
+    };
+  }
+
+  // Proxy RTSP autenticado (para preview na tela de configurações)
+  @Get('rtsp-proxy')
+  @Roles('ADMIN', 'ADMIN_CONDOMINIO')
+  async rtspProxyAuth(
+    @TenantId() tenantId: string,
+    @Res() res: Response,
+  ) {
+    const config = await this.configService.findByTenantId(tenantId);
+    if (!config?.rtspCameraUrl) {
+      res.status(404).json({ message: 'Câmera não configurada' });
+      return;
+    }
+
+    try {
+      const response = await axios.get(config.rtspCameraUrl, {
+        responseType: 'stream',
+        timeout: 10000,
+        headers: { 'Accept': 'image/jpeg, multipart/x-mixed-replace, */*' },
+      });
+
+      const contentType = response.headers['content-type'] || 'image/jpeg';
+      res.set({
+        'Content-Type': contentType,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      });
+
+      response.data.pipe(res);
+    } catch (err: any) {
+      res.status(502).json({ message: `Falha ao conectar na câmera: ${err.message}` });
+    }
   }
 }

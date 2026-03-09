@@ -140,6 +140,8 @@ export const api = {
     fetchApi('/tenant-config/test/whatsapp', { method: 'POST', body: JSON.stringify({ phone }), token }),
   testHikvision: (token: string, tenantId?: string) =>
     fetchApi('/tenant-config/test/hikvision', { method: 'POST', body: JSON.stringify({ tenantId }), token }),
+  testRtsp: (token: string) =>
+    fetchApi('/tenant-config/test/rtsp', { method: 'POST', token }),
 
   // Totem (público - sem prefixo /api)
   totemFindByCode: (code: string) =>

@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Body, Param,
+  Controller, Get, Post, Body, Param, Res, Query,
   UseInterceptors, UploadedFiles,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
@@ -9,6 +9,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { DeliveriesService } from './deliveries.service';
 import { TenantConfigService } from '../tenant-config/tenant-config.service';
 import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { Response } from 'express';
+import axios from 'axios';
 
 export class TotemWithdrawDto {
   @IsString() @IsNotEmpty() code: string;
@@ -33,6 +35,42 @@ export class TotemController {
   async getRtspConfig(@Param('tenantId') tenantId: string) {
     const rtspCameraUrl = await this.tenantConfigService.getRtspCameraUrl(tenantId);
     return { rtspCameraUrl };
+  }
+
+  /**
+   * Proxy da câmera RTSP - evita problemas de CORS e mixed content (HTTP/HTTPS)
+   * Retorna a imagem/stream da câmera diretamente
+   */
+  @Get('config/:tenantId/rtsp-proxy')
+  async rtspProxy(
+    @Param('tenantId') tenantId: string,
+    @Res() res: Response,
+  ) {
+    const rtspCameraUrl = await this.tenantConfigService.getRtspCameraUrl(tenantId);
+    if (!rtspCameraUrl) {
+      res.status(404).json({ message: 'Câmera não configurada' });
+      return;
+    }
+
+    try {
+      const response = await axios.get(rtspCameraUrl, {
+        responseType: 'stream',
+        timeout: 10000,
+        headers: { 'Accept': 'image/jpeg, multipart/x-mixed-replace, */*' },
+      });
+
+      const contentType = response.headers['content-type'] || 'image/jpeg';
+      res.set({
+        'Content-Type': contentType,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Access-Control-Allow-Origin': '*',
+      });
+
+      response.data.pipe(res);
+    } catch (err: any) {
+      res.status(502).json({ message: `Falha ao conectar na câmera: ${err.message}` });
+    }
   }
 
   /**

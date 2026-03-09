@@ -128,7 +128,10 @@ function TotemContent() {
   useEffect(() => {
     if (tenantId) {
       api.totemGetRtspConfig(tenantId).then((data: any) => {
-        if (data?.rtspCameraUrl) setRtspCameraUrl(data.rtspCameraUrl);
+        if (data?.rtspCameraUrl) {
+          // Usar proxy para evitar CORS e mixed content
+          setRtspCameraUrl(`/totem-api/config/${encodeURIComponent(tenantId)}/rtsp-proxy`);
+        }
       }).catch(() => { });
     }
   }, [tenantId]);
