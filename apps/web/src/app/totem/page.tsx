@@ -47,7 +47,7 @@ const STORAGE_KEYS = {
   password: "totem.settingsPassword",
 };
 
-export function TotemScreen({ forcedMode }: { forcedMode?: TotemMode }) {
+function TotemScreen({ forcedMode }: { forcedMode?: TotemMode }) {
   return (
     <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center bg-slate-900"><Loader2 className="h-8 w-8 animate-spin text-blue-400" /></div>}>
       <TotemContent forcedMode={forcedMode} />

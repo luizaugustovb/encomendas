@@ -1,7 +1,5 @@
-"use client";
-
-import { TotemScreen } from "../page";
+import { redirect } from "next/navigation";
 
 export default function TotemTabletPage() {
-  return <TotemScreen forcedMode="tablet" />;
+  redirect("/totem?mode=tablet");
 }
