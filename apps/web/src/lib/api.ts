@@ -144,27 +144,36 @@ export const api = {
     fetchApi('/tenant-config/test/rtsp', { method: 'POST', body: JSON.stringify({ tenantId }), token }),
 
   // Totem (público - sem prefixo /api)
-  totemFindByCode: (code: string) =>
-    fetch(`/totem-api/delivery/${encodeURIComponent(code)}`).then(async (r) => {
+  totemGetTenants: () =>
+    fetch(`/totem-api/tenants`).then(async (r) => {
       if (!r.ok) {
         const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
         throw new Error(err.message || `HTTP ${r.status}`);
       }
       return r.json();
     }),
-  totemGetResidents: (code: string) =>
-    fetch(`/totem-api/delivery/${encodeURIComponent(code)}/residents`).then(async (r) => {
+  totemFindByCode: (code: string, tenantId?: string) =>
+    fetch(`/totem-api/delivery/${encodeURIComponent(code)}${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`).then(async (r) => {
       if (!r.ok) {
         const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
         throw new Error(err.message || `HTTP ${r.status}`);
       }
       return r.json();
     }),
-  totemWithdraw: (code: string, photos: File[] = [], withdrawnById?: string) => {
+  totemGetResidents: (code: string, tenantId?: string) =>
+    fetch(`/totem-api/delivery/${encodeURIComponent(code)}/residents${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`).then(async (r) => {
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
+        throw new Error(err.message || `HTTP ${r.status}`);
+      }
+      return r.json();
+    }),
+  totemWithdraw: (code: string, photos: File[] = [], withdrawnById?: string, tenantId?: string) => {
     const formData = new FormData();
     formData.append('code', code);
     photos.forEach((photo) => formData.append('photos', photo));
     if (withdrawnById) formData.append('withdrawnById', withdrawnById);
+    if (tenantId) formData.append('tenantId', tenantId);
     return fetch('/totem-api/withdraw', { method: 'POST', body: formData }).then(async (r) => {
       if (!r.ok) {
         const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));

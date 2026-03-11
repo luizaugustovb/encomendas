@@ -5,9 +5,10 @@ import { TotemController } from './totem.controller';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { TenantConfigModule } from '../tenant-config/tenant-config.module';
 import { HikvisionModule } from '../hikvision/hikvision.module';
+import { TenantsModule } from '../tenants/tenants.module';
 
 @Module({
-  imports: [WhatsappModule, TenantConfigModule, HikvisionModule],
+  imports: [WhatsappModule, TenantConfigModule, HikvisionModule, TenantsModule],
   controllers: [DeliveriesController, TotemController],
   providers: [DeliveriesService],
   exports: [DeliveriesService],

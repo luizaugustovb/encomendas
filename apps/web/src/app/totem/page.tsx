@@ -8,6 +8,7 @@ import jsQR from "jsqr";
 import {
   Package, QrCode, Camera, CheckCircle, XCircle,
   Keyboard, Loader2, UserCheck, RotateCcw, Users, Shield, Settings,
+  Lock, Smartphone, Monitor, Save,
 } from "lucide-react";
 
 type Step =
@@ -32,12 +33,30 @@ interface Resident {
   photoUrl?: string;
 }
 
-export default function TotemPage() {
+interface TotemTenant {
+  id: string;
+  name: string;
+}
+
+type TotemMode = "monitor" | "tablet";
+
+const STORAGE_KEYS = {
+  tenantId: "totem.selectedTenantId",
+  camera: "totem.cameraSelection",
+  mirror: "totem.cameraMirror",
+  password: "totem.settingsPassword",
+};
+
+export function TotemScreen({ forcedMode }: { forcedMode?: TotemMode }) {
   return (
     <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center bg-slate-900"><Loader2 className="h-8 w-8 animate-spin text-blue-400" /></div>}>
-      <TotemContent />
+      <TotemContent forcedMode={forcedMode} />
     </Suspense>
   );
+}
+
+export default function TotemPage() {
+  return <TotemScreen />;
 }
 
 // Componente de câmera com refresh automático (snapshot RTSP via proxy)
@@ -88,9 +107,12 @@ function CameraFeed({ url }: { url: string }) {
   );
 }
 
-function TotemContent() {
+function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
   const searchParams = useSearchParams();
-  const tenantId = searchParams.get("tenant") || "";
+  const queryTenantId = searchParams.get("tenant") || "";
+  const modeParam = searchParams.get("mode");
+  const mode: TotemMode = forcedMode || (modeParam === "tablet" ? "tablet" : "monitor");
+  const isTabletMode = mode === "tablet";
   const [step, setStep] = useState<Step>("scan");
   const [delivery, setDelivery] = useState<DeliveryData | null>(null);
   const [manualCode, setManualCode] = useState("");
@@ -110,10 +132,19 @@ function TotemContent() {
   const [isMirrored, setIsMirrored] = useState(true);
   const [logoError, setLogoError] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [configReady, setConfigReady] = useState(false);
+  const [activeTenantId, setActiveTenantId] = useState("");
+  const [pendingTenantId, setPendingTenantId] = useState("");
+  const [tenants, setTenants] = useState<TotemTenant[]>([]);
+  const [settingsPasswordInput, setSettingsPasswordInput] = useState("");
+  const [settingsPasswordError, setSettingsPasswordError] = useState("");
+  const [showSettingsAuth, setShowSettingsAuth] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const wakeLockRef = useRef<any>(null);
   const scanningRef = useRef<boolean>(false);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastScannedRef = useRef<string>("");
@@ -124,6 +155,18 @@ function TotemContent() {
   const stepRef = useRef<Step>("scan");
   // Keep stepRef in sync
   useEffect(() => { stepRef.current = step; }, [step]);
+
+  const currentTenantName = tenants.find((tenant) => tenant.id === activeTenantId)?.name || "";
+
+  const getSavedPassword = useCallback(() => {
+    if (typeof window === "undefined") return "1234";
+    return localStorage.getItem(STORAGE_KEYS.password) || "1234";
+  }, []);
+
+  const getPreferredCameraChoice = useCallback(() => {
+    if (selectedDeviceId) return selectedDeviceId;
+    return isTabletMode ? "user" : "environment";
+  }, [isTabletMode, selectedDeviceId]);
 
   const resetInactivity = useCallback(() => {
     if (inactivityRef.current) clearTimeout(inactivityRef.current);
@@ -136,22 +179,61 @@ function TotemContent() {
     }, 60000);
   }, []);
 
-  // Start camera on mount (directly in scan mode)
   useEffect(() => {
-    enumerateDevices();
-    startCameraWithRetry("environment").then(() => startQrScanning());
+    if (typeof window === "undefined") return;
+
+    const savedTenantId = localStorage.getItem(STORAGE_KEYS.tenantId) || "";
+    const savedCamera = localStorage.getItem(STORAGE_KEYS.camera) || "";
+    const savedMirror = localStorage.getItem(STORAGE_KEYS.mirror);
+    if (!localStorage.getItem(STORAGE_KEYS.password)) {
+      localStorage.setItem(STORAGE_KEYS.password, "1234");
+    }
+
+    const initialTenantId = queryTenantId || savedTenantId;
+    setActiveTenantId(initialTenantId);
+    setPendingTenantId(initialTenantId);
+    if (savedCamera) setSelectedDeviceId(savedCamera);
+    setIsMirrored(savedMirror !== null ? savedMirror === "true" : isTabletMode);
+    setConfigReady(true);
+
+    api.totemGetTenants().then(setTenants).catch(() => {});
 
     // Register Service Worker for PWA
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
 
+    const requestWakeLock = async () => {
+      try {
+        if ((navigator as any).wakeLock?.request) {
+          wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+        }
+      } catch {}
+    };
+
+    requestWakeLock();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") requestWakeLock();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      wakeLockRef.current?.release?.().catch?.(() => {});
       if (inactivityRef.current) clearTimeout(inactivityRef.current);
       stopQrScanning();
       stopCamera();
     };
-  }, []);
+  }, [isTabletMode, queryTenantId]);
+
+  useEffect(() => {
+    if (!configReady) return;
+    enumerateDevices();
+    if (step === "scan") {
+      startCameraWithRetry(getPreferredCameraChoice()).then(() => startQrScanning());
+    }
+  }, [configReady]);
 
   async function enumerateDevices() {
     if (!navigator.mediaDevices?.enumerateDevices) {
@@ -172,17 +254,19 @@ function TotemContent() {
     }
   }
 
-  // Load RTSP config if tenantId provided
   useEffect(() => {
-    if (tenantId) {
-      api.totemGetRtspConfig(tenantId).then((data: any) => {
+    if (activeTenantId) {
+      api.totemGetRtspConfig(activeTenantId).then((data: any) => {
         if (data?.rtspCameraUrl) {
-          // Usar proxy para evitar CORS e mixed content
-          setRtspCameraUrl(`/totem-api/config/${encodeURIComponent(tenantId)}/rtsp-proxy`);
+          setRtspCameraUrl(`/totem-api/config/${encodeURIComponent(activeTenantId)}/rtsp-proxy`);
+        } else {
+          setRtspCameraUrl(null);
         }
       }).catch(() => { });
+    } else {
+      setRtspCameraUrl(null);
     }
-  }, [tenantId]);
+  }, [activeTenantId]);
 
   // Manage camera based on step changes
   useEffect(() => {
@@ -192,11 +276,13 @@ function TotemContent() {
     } else {
       // Na tela scan: liga câmera e scanning, sem timer de inatividade
       if (inactivityRef.current) clearTimeout(inactivityRef.current);
-      startCameraWithRetry("environment").then(() => startQrScanning());
+      if (configReady) {
+        startCameraWithRetry(getPreferredCameraChoice()).then(() => startQrScanning());
+      }
       setShowManualInput(false);
       setShowSettings(false);
     }
-  }, [step]);
+  }, [configReady, getPreferredCameraChoice, step]);
 
   function resetState() {
     setDelivery(null);
@@ -215,6 +301,7 @@ function TotemContent() {
   async function startCamera(facingMode: "environment" | "user" | string = "environment") {
     try {
       stopCamera();
+      setSelectedDeviceId(facingMode);
 
       const constraints: MediaStreamConstraints = {
         video: typeof facingMode === "string" && facingMode !== "environment" && facingMode !== "user"
@@ -245,7 +332,7 @@ function TotemContent() {
         // Atualiza o ID da câmera selecionada se for automático
         const track = stream.getVideoTracks()[0];
         if (track) {
-          setSelectedDeviceId(track.getSettings().deviceId || "");
+          setSelectedDeviceId(track.getSettings().deviceId || facingMode);
         }
       }
     } catch (err: any) {
@@ -375,11 +462,16 @@ function TotemContent() {
   // =================== FLOW ===================
   async function searchDelivery(code: string) {
     if (!code.trim()) return;
+    if (!activeTenantId) {
+      setError("Selecione um condomínio nas configurações do totem.");
+      setStep("error");
+      return;
+    }
     setLoading(true);
     setError("");
     resetInactivity();
     try {
-      const result = await api.totemFindByCode(code.trim());
+      const result = await api.totemFindByCode(code.trim(), activeTenantId);
       if (result.status === "WITHDRAWN") {
         setError("Esta encomenda já foi retirada.");
         setStep("error");
@@ -419,7 +511,7 @@ function TotemContent() {
   async function startPackageCapture() {
     setStep("camera-package");
     resetInactivity();
-    await startCamera("environment");
+    await startCamera(isTabletMode ? getPreferredCameraChoice() : "environment");
   }
 
   function takePackagePhoto() {
@@ -439,7 +531,7 @@ function TotemContent() {
     setLoading(true);
     resetInactivity();
     try {
-      const result = await api.totemGetResidents(delivery.code);
+      const result = await api.totemGetResidents(delivery.code, activeTenantId);
       // Filtra o dono da encomenda da lista
       const others = (result as Resident[]).filter((r) => r.id !== delivery.user.id);
       if (others.length === 0) {
@@ -473,7 +565,7 @@ function TotemContent() {
         photos.push(file);
       }
       const withdrawnById = selectedResident?.id;
-      await api.totemWithdraw(delivery.code, photos, withdrawnById);
+      await api.totemWithdraw(delivery.code, photos, withdrawnById, activeTenantId);
       setStep("success");
     } catch (err: any) {
       setError(err.message || "Erro ao confirmar retirada");
@@ -490,6 +582,39 @@ function TotemContent() {
     setStep("scan");
   }
 
+  function openSettings() {
+    setSettingsPasswordError("");
+    if (showSettings) {
+      setShowSettings(false);
+      return;
+    }
+    setShowSettingsAuth(true);
+  }
+
+  function unlockSettings() {
+    if (settingsPasswordInput !== getSavedPassword()) {
+      setSettingsPasswordError("Senha inválida");
+      return;
+    }
+    setShowSettingsAuth(false);
+    setSettingsPasswordInput("");
+    setShowSettings(true);
+  }
+
+  function saveTotemSettings() {
+    if (!pendingTenantId) return;
+    localStorage.setItem(STORAGE_KEYS.tenantId, pendingTenantId);
+    localStorage.setItem(STORAGE_KEYS.camera, selectedDeviceId || getPreferredCameraChoice());
+    localStorage.setItem(STORAGE_KEYS.mirror, String(isMirrored));
+    if (newPassword.trim()) {
+      localStorage.setItem(STORAGE_KEYS.password, newPassword.trim());
+      setNewPassword("");
+    }
+    setActiveTenantId(pendingTenantId);
+    setShowSettings(false);
+    goToScan();
+  }
+
   const withdrawerName = selectedResident?.name || delivery?.user.name || "";
 
   // =================== RENDER ===================
@@ -497,11 +622,36 @@ function TotemContent() {
     <div className="h-screen w-screen overflow-hidden" onClick={resetInactivity}>
       <canvas ref={canvasRef} className="hidden" />
 
+      {showSettingsAuth && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <Lock className="h-5 w-5 text-amber-400" />
+              <h2 className="text-lg font-semibold">Acesso às configurações</h2>
+            </div>
+            <input
+              type="password"
+              value={settingsPasswordInput}
+              onChange={(e) => setSettingsPasswordInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && unlockSettings()}
+              placeholder="Digite a senha"
+              className="w-full rounded-xl bg-slate-800 px-4 py-3 outline-none ring-1 ring-slate-700 focus:ring-blue-500"
+            />
+            {settingsPasswordError && <p className="mt-2 text-sm text-red-400">{settingsPasswordError}</p>}
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => setShowSettingsAuth(false)} className="flex-1 rounded-xl bg-slate-700 px-4 py-3 text-sm hover:bg-slate-600">Cancelar</button>
+              <button onClick={unlockSettings} className="flex-1 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold hover:bg-blue-700">Entrar</button>
+            </div>
+            <p className="mt-3 text-[11px] text-slate-500">Senha padrão para teste: 1234</p>
+          </div>
+        </div>
+      )}
+
       {/* ===== SCAN: Tela principal - câmera 70% + painel lateral 30% ===== */}
       {step === "scan" && (
-        <div className="flex h-full w-full">
+        <div className={`flex h-full w-full ${isTabletMode ? "flex-col" : ""}`}>
           {/* Câmera - 70% da tela */}
-          <div className="relative h-full" style={{ width: "70%" }}>
+          <div className="relative" style={isTabletMode ? { width: "100%", height: "56%" } : { width: "70%", height: "100%" }}>
             <video
               ref={videoRef}
               className="h-full w-full object-cover"
@@ -551,7 +701,7 @@ function TotemContent() {
           </div>
 
           {/* Painel lateral - 30% */}
-          <div className="flex h-full flex-col items-center justify-between bg-slate-900 p-6" style={{ width: "30%" }}>
+          <div className="flex flex-col items-center justify-between bg-slate-900 p-6" style={isTabletMode ? { width: "100%", height: "44%" } : { width: "30%", height: "100%" }}>
             <div className="flex flex-col items-center gap-4 pt-8">
               {!logoError ? (
                 <img src="/logo.png" alt="Logo" className="h-16 w-auto object-contain" onError={() => setLogoError(true)} />
@@ -561,11 +711,15 @@ function TotemContent() {
                 </div>
               )}
               <h1 className="text-center text-2xl font-bold lg:text-3xl">
-                Retirada de<br />Encomendas
+                {isTabletMode ? "Totem Tablet" : "Retirada de"}<br />{isTabletMode ? "Encomendas" : "Encomendas"}
               </h1>
               <p className="text-center text-sm text-slate-400 lg:text-base">
-                Posicione a encomenda com o QR Code visível na câmera
+                {currentTenantName ? `${currentTenantName}` : "Selecione um condomínio nas configurações"}
               </p>
+              <div className="flex items-center gap-2 rounded-full bg-slate-800 px-3 py-1 text-[11px] uppercase tracking-wide text-slate-300">
+                {isTabletMode ? <Smartphone className="h-3.5 w-3.5 text-blue-400" /> : <Monitor className="h-3.5 w-3.5 text-green-400" />}
+                Modo {isTabletMode ? "Tablet" : "Monitor"}
+              </div>
               {!window.isSecureContext && (
                 <div className="mt-2 rounded-lg bg-red-500/20 p-2 text-[10px] text-red-400 border border-red-500/30">
                   ⚠️ Acesso à câmera bloqueado por falta de HTTPS (Segurança)
@@ -576,7 +730,7 @@ function TotemContent() {
             <div className="flex flex-col items-center gap-4 w-full">
               {/* Botão de Configurações (engrenagem discreta) */}
               <button
-                onClick={() => setShowSettings(!showSettings)}
+                onClick={openSettings}
                 className="flex items-center gap-2 self-end rounded-lg px-3 py-1.5 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300"
               >
                 <Settings className="h-4 w-4" />
@@ -586,14 +740,31 @@ function TotemContent() {
               {/* Painel de Configurações (colapsável) */}
               {showSettings && (
                 <div className="w-full space-y-3 rounded-xl border border-slate-700 bg-slate-800/80 p-4 animate-in fade-in duration-200">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Configurações da Câmera</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Configurações do Totem</p>
+
+                  <div>
+                    <div className="mb-1 flex items-center gap-2 text-slate-400">
+                      <Package className="h-3 w-3" />
+                      <span className="text-xs">Condomínio</span>
+                    </div>
+                    <select
+                      value={pendingTenantId}
+                      onChange={(e) => setPendingTenantId(e.target.value)}
+                      className="w-full rounded-lg bg-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Selecione o condomínio</option>
+                      {tenants.map((tenant) => (
+                        <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
                   {/* Seletor de Câmera */}
                   <div>
                     <div className="mb-1 flex items-center justify-between">
                       <div className="flex items-center gap-2 text-slate-400">
                         <Camera className="h-3 w-3" />
-                        <span className="text-xs">Câmera Principal</span>
+                        <span className="text-xs">Câmera {isTabletMode ? "do tablet" : "principal"}</span>
                       </div>
                       <button
                         onClick={enumerateDevices}
@@ -607,7 +778,7 @@ function TotemContent() {
                       onChange={(e) => startCamera(e.target.value)}
                       className="w-full rounded-lg bg-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="environment">Câmera Padrão (Traseira)</option>
+                      <option value="environment">Câmera Traseira</option>
                       <option value="user">Câmera Frontal</option>
                       {videoDevices.filter(d => d.deviceId !== "").map((device) => (
                         <option key={device.deviceId} value={device.deviceId}>
@@ -627,6 +798,35 @@ function TotemContent() {
                       <div className={`h-3 w-3 rounded-full bg-white transition-transform ${isMirrored ? 'translate-x-5' : 'translate-x-0'}`} />
                     </div>
                   </button>
+
+                  <div>
+                    <div className="mb-1 flex items-center gap-2 text-slate-400">
+                      <Lock className="h-3 w-3" />
+                      <span className="text-xs">Nova senha das configurações</span>
+                    </div>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Deixe em branco para manter"
+                      className="w-full rounded-lg bg-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <button
+                    onClick={saveTotemSettings}
+                    disabled={!pendingTenantId}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    <Save className="h-4 w-4" />
+                    Salvar no totem
+                  </button>
+                </div>
+              )}
+
+              {!activeTenantId && (
+                <div className="w-full rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-xs text-amber-300">
+                  Configure o condomínio para habilitar leitura de QR e destrava da porta.
                 </div>
               )}
 

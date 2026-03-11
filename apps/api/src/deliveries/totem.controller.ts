@@ -8,6 +8,7 @@ import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { DeliveriesService } from './deliveries.service';
 import { TenantConfigService } from '../tenant-config/tenant-config.service';
+import { TenantsService } from '../tenants/tenants.service';
 import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 import { Response } from 'express';
 import axios from 'axios';
@@ -20,6 +21,7 @@ import { unlink } from 'fs';
 export class TotemWithdrawDto {
   @IsString() @IsNotEmpty() code: string;
   @IsOptional() @IsString() withdrawnById?: string;
+  @IsOptional() @IsString() tenantId?: string;
 }
 
 /**
@@ -31,7 +33,16 @@ export class TotemController {
   constructor(
     private deliveriesService: DeliveriesService,
     private tenantConfigService: TenantConfigService,
+    private tenantsService: TenantsService,
   ) {}
+
+  @Get('tenants')
+  async listTenants() {
+    const tenants = await this.tenantsService.findAll();
+    return tenants
+      .filter((tenant: any) => tenant.active !== false)
+      .map((tenant: any) => ({ id: tenant.id, name: tenant.name }));
+  }
 
   /**
    * Retorna a URL da câmera RTSP configurada para o condomínio (público)
@@ -104,16 +115,16 @@ export class TotemController {
    * Busca encomenda por código (QR ou manual)
    */
   @Get('delivery/:code')
-  async findByCode(@Param('code') code: string) {
-    return this.deliveriesService.findByCode(code);
+  async findByCode(@Param('code') code: string, @Query('tenantId') tenantId?: string) {
+    return this.deliveriesService.findByCode(code, tenantId);
   }
 
   /**
    * Lista moradores da mesma unidade da encomenda (para seleção "não sou eu")
    */
   @Get('delivery/:code/residents')
-  async getUnitResidents(@Param('code') code: string) {
-    return this.deliveriesService.getUnitResidentsByCode(code);
+  async getUnitResidents(@Param('code') code: string, @Query('tenantId') tenantId?: string) {
+    return this.deliveriesService.getUnitResidentsByCode(code, tenantId);
   }
 
   /**
@@ -148,6 +159,7 @@ export class TotemController {
       dto.code,
       photoUrls,
       dto.withdrawnById,
+      dto.tenantId,
     );
   }
 }

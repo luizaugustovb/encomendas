@@ -475,9 +475,10 @@ export class DeliveriesService {
   /**
    * Busca encomenda por código ou QR Code (para uso do totem)
    */
-  async findByCode(code: string) {
+  async findByCode(code: string, tenantId?: string) {
     const delivery = await this.prisma.delivery.findFirst({
       where: {
+        ...(tenantId ? { tenantId } : {}),
         OR: [{ code }, { qrcode: code }],
       },
       include: {
@@ -494,9 +495,9 @@ export class DeliveriesService {
   /**
    * Lista moradores ativos da mesma unidade da encomenda (para fluxo "não sou eu" no totem)
    */
-  async getUnitResidentsByCode(code: string) {
+  async getUnitResidentsByCode(code: string, tenantId?: string) {
     const delivery = await this.prisma.delivery.findFirst({
-      where: { OR: [{ code }, { qrcode: code }] },
+      where: { ...(tenantId ? { tenantId } : {}), OR: [{ code }, { qrcode: code }] },
       select: { unitId: true, userId: true },
     });
     if (!delivery) throw new NotFoundException('Encomenda não encontrada');
@@ -518,9 +519,10 @@ export class DeliveriesService {
    * Retirada via totem (sem autenticação JWT, usa código da encomenda)
    * Agora aceita múltiplas fotos e identificação de quem retirou
    */
-  async withdrawFromTotem(code: string, photoUrls: string[] = [], withdrawnById?: string) {
+  async withdrawFromTotem(code: string, photoUrls: string[] = [], withdrawnById?: string, tenantId?: string) {
     const delivery = await this.prisma.delivery.findFirst({
       where: {
+        ...(tenantId ? { tenantId } : {}),
         OR: [{ code }, { qrcode: code }],
       },
       include: { user: true, unit: true, location: true },
@@ -625,6 +627,25 @@ export class DeliveriesService {
       } catch (error) {
         this.logger.error(`Erro ao enviar WhatsApp de retirada (totem): ${error.message}`);
       }
+    }
+
+    try {
+      const doorResult = await this.hikvisionService.openDoor(delivery.tenantId, 1);
+      await this.prisma.deliveryEvent.create({
+        data: {
+          deliveryId: delivery.id,
+          userId: actualWithdrawnById,
+          type: doorResult.success ? 'TOTEM_DOOR_OPENED' : 'TOTEM_DOOR_FAILED',
+          metadata: JSON.stringify({
+            source: 'TOTEM',
+            tenantId: delivery.tenantId,
+            doorNo: 1,
+            message: doorResult.message,
+          }),
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(`[Totem] Falha ao destravar porta do tenant ${delivery.tenantId}: ${error.message}`);
     }
 
     // Remove moradores da unidade do equipamento Hikvision se não houver mais encomendas pendentes
