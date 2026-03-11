@@ -635,11 +635,12 @@ export class DeliveriesService {
         data: {
           deliveryId: delivery.id,
           userId: actualWithdrawnById,
-          type: doorResult.success ? 'TOTEM_DOOR_OPENED' : 'TOTEM_DOOR_FAILED',
+          type: 'DOOR_ACCESS',
           metadata: JSON.stringify({
             source: 'TOTEM',
             tenantId: delivery.tenantId,
             doorNo: 1,
+            success: doorResult.success,
             message: doorResult.message,
           }),
         },
