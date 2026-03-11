@@ -659,9 +659,9 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
 
       {/* ===== SCAN: Tela principal - câmera 70% + painel lateral 30% ===== */}
       {step === "scan" && (
-        <div className={`flex h-full w-full ${isTabletMode ? "flex-col" : ""}`}>
+        <div className="flex h-full w-full">
           {/* Câmera - 70% da tela */}
-          <div className="relative" style={isTabletMode ? { width: "100%", height: "56%" } : { width: "70%", height: "100%" }}>
+          <div className="relative" style={{ width: "70%", height: "100%" }}>
             <video
               ref={videoRef}
               className="h-full w-full object-cover"
@@ -711,7 +711,7 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
           </div>
 
           {/* Painel lateral - 30% */}
-          <div className="flex flex-col items-center justify-between bg-slate-900 p-6" style={isTabletMode ? { width: "100%", height: "44%" } : { width: "30%", height: "100%" }}>
+          <div className="flex flex-col items-center justify-between bg-slate-900 p-6" style={{ width: "30%", height: "100%" }}>
             <div className="flex flex-col items-center gap-4 pt-8">
               {!logoError ? (
                 <img src="/logo.png" alt="Logo" className="h-16 w-auto object-contain" onError={() => setLogoError(true)} />
@@ -721,7 +721,7 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
                 </div>
               )}
               <h1 className="text-center text-2xl font-bold lg:text-3xl">
-                {isTabletMode ? "Totem Tablet" : "Retirada de"}<br />{isTabletMode ? "Encomendas" : "Encomendas"}
+                Retirada de<br />Encomendas
               </h1>
               <p className="text-center text-sm text-slate-400 lg:text-base">
                 {currentTenantName ? `${currentTenantName}` : "Selecione um condomínio nas configurações"}
