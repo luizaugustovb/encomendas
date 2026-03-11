@@ -129,6 +129,7 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
   const [rtspCameraUrl, setRtspCameraUrl] = useState<string | null>(null);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+  const [pendingDeviceId, setPendingDeviceId] = useState<string>("");
   const [isMirrored, setIsMirrored] = useState(true);
   const [logoError, setLogoError] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -269,6 +270,7 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
   }, [activeTenantId]);
 
   // Manage camera based on step changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (step !== "scan") {
       resetInactivity();
@@ -280,9 +282,10 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
         startCameraWithRetry(getPreferredCameraChoice()).then(() => startQrScanning());
       }
       setShowManualInput(false);
-      setShowSettings(false);
+      // Não fecha as configurações aqui — só fecha via ação explícita do usuário
     }
-  }, [configReady, getPreferredCameraChoice, step]);
+  // Depende apenas de step e configReady. getPreferredCameraChoice é intencional via ref.
+  }, [step, configReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function resetState() {
     setDelivery(null);
@@ -598,21 +601,28 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
     }
     setShowSettingsAuth(false);
     setSettingsPasswordInput("");
+    setPendingDeviceId(selectedDeviceId);
     setShowSettings(true);
   }
 
   function saveTotemSettings() {
     if (!pendingTenantId) return;
+    const deviceToSave = pendingDeviceId || selectedDeviceId || getPreferredCameraChoice();
     localStorage.setItem(STORAGE_KEYS.tenantId, pendingTenantId);
-    localStorage.setItem(STORAGE_KEYS.camera, selectedDeviceId || getPreferredCameraChoice());
+    localStorage.setItem(STORAGE_KEYS.camera, deviceToSave);
     localStorage.setItem(STORAGE_KEYS.mirror, String(isMirrored));
     if (newPassword.trim()) {
       localStorage.setItem(STORAGE_KEYS.password, newPassword.trim());
       setNewPassword("");
     }
+    setSelectedDeviceId(deviceToSave);
     setActiveTenantId(pendingTenantId);
     setShowSettings(false);
-    goToScan();
+    // Reinicia câmera com a câmera selecionada
+    stopCamera();
+    setTimeout(() => {
+      startCameraWithRetry(deviceToSave).then(() => startQrScanning());
+    }, 200);
   }
 
   const withdrawerName = selectedResident?.name || delivery?.user.name || "";
@@ -774,8 +784,8 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
                       </button>
                     </div>
                     <select
-                      value={selectedDeviceId}
-                      onChange={(e) => startCamera(e.target.value)}
+                      value={pendingDeviceId}
+                      onChange={(e) => setPendingDeviceId(e.target.value)}
                       className="w-full rounded-lg bg-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="environment">Câmera Traseira</option>
