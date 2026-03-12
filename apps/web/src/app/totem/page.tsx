@@ -201,7 +201,7 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
 
     // Register Service Worker for PWA
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker.register("/sw.js", { scope: "/totem" }).catch(() => {});
     }
 
     const requestWakeLock = async () => {

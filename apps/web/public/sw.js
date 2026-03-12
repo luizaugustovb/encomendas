@@ -1,4 +1,4 @@
-const CACHE_NAME = 'totem-v1';
+const CACHE_NAME = 'totem-v2';
 const PRECACHE_URLS = [
   '/totem',
 ];
@@ -20,18 +20,23 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Network-first strategy: always try network, fallback to cache
+  const url = new URL(event.request.url);
+
+  // Só intercepta rotas do totem — não interfere no login, dashboard, etc.
+  if (!url.pathname.startsWith('/totem')) return;
+
+  // Network-first: tenta rede, usa cache só se offline
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match('/totem'))
     );
     return;
   }
-  // For other requests, network-first with cache fallback
+
+  // Outros recursos do totem: network-first com cache fallback
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Cache successful GET responses
         if (event.request.method === 'GET' && response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));

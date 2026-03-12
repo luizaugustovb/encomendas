@@ -25,6 +25,18 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        {/* Remove service workers antigos registrados fora do escopo /totem */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(reg) {
+                if (!reg.scope.endsWith('/totem/') && !reg.scope.endsWith('/totem')) {
+                  reg.unregister();
+                }
+              });
+            });
+          }
+        `}} />
       </head>
       <body className={inter.className}>
         <ThemeWrapper>
