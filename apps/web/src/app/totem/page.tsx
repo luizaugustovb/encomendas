@@ -1180,19 +1180,43 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
       {/* ===== SUCCESS ===== */}
       {
         step === "success" && (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-6 p-8">
-            <div className="rounded-full bg-green-600/20 p-8">
-              <CheckCircle className="h-28 w-28 text-green-400" />
+          <div className="flex h-full w-full flex-col items-center justify-center gap-5 p-8">
+
+            {/* Banner da porta destravada */}
+            <DoorUnlockBanner seconds={10} />
+
+            {/* Ícone + título */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="rounded-full bg-green-600/20 p-6">
+                <CheckCircle className="h-24 w-24 text-green-400" />
+              </div>
+              <h2 className="text-4xl font-bold text-green-400">Encomenda Retirada!</h2>
+              {delivery && (
+                <p className="font-mono text-lg text-slate-400">{delivery.code}</p>
+              )}
             </div>
-            <h2 className="text-4xl font-bold text-green-400">Encomenda Retirada!</h2>
-            <p className="text-2xl text-slate-300">Retire sua encomenda no local indicado.</p>
-            {delivery && (
-              <p className="font-mono text-lg text-slate-400">{delivery.code}</p>
+
+            {/* Miniaturas das fotos capturadas */}
+            {(capturedFacePhoto || capturedPackagePhoto) && (
+              <div className="flex items-center gap-4">
+                {capturedFacePhoto && (
+                  <div className="flex flex-col items-center gap-1">
+                    <img src={capturedFacePhoto} alt="Foto do rosto" className="h-24 w-24 rounded-xl object-cover ring-2 ring-green-500/50" />
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wide">Rosto</span>
+                  </div>
+                )}
+                {capturedPackagePhoto && (
+                  <div className="flex flex-col items-center gap-1">
+                    <img src={capturedPackagePhoto} alt="Foto da encomenda" className="h-24 w-24 rounded-xl object-cover ring-2 ring-blue-500/50" />
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wide">Encomenda</span>
+                  </div>
+                )}
+              </div>
             )}
 
             <button
               onClick={goToScan}
-              className="mt-6 rounded-2xl bg-blue-600 px-12 py-4 text-xl font-semibold hover:bg-blue-700"
+              className="rounded-2xl bg-blue-600 px-12 py-4 text-xl font-semibold hover:bg-blue-700"
             >
               Voltar ao Início
             </button>
@@ -1230,6 +1254,38 @@ function TotemContent({ forcedMode }: { forcedMode?: TotemMode }) {
         }
       `}</style>
     </div >
+  );
+}
+
+function DoorUnlockBanner({ seconds }: { seconds: number }) {
+  const [remaining, setRemaining] = useState(seconds);
+
+  useEffect(() => {
+    if (remaining <= 0) return;
+    const t = setTimeout(() => setRemaining((p) => p - 1), 1000);
+    return () => clearTimeout(t);
+  }, [remaining]);
+
+  const urgent = remaining <= 3;
+
+  return (
+    <div
+      className={`w-full max-w-2xl rounded-2xl border-2 px-6 py-4 text-center transition-colors duration-500 ${
+        urgent
+          ? "border-red-500 bg-red-500/20 animate-pulse"
+          : "border-amber-400 bg-amber-400/10"
+      }`}
+    >
+      <p className={`text-2xl font-black uppercase tracking-widest drop-shadow-lg ${urgent ? "text-red-400" : "text-amber-300"}`}>
+        🔓 A PORTA ESTÁ DESTRAVADA!
+      </p>
+      <p className={`mt-1 text-4xl font-black tabular-nums ${urgent ? "text-red-300" : "text-amber-200"}`}>
+        {remaining}s
+      </p>
+      <p className={`text-sm font-semibold uppercase tracking-wider ${urgent ? "text-red-400/80" : "text-amber-400/80"}`}>
+        para você sair
+      </p>
+    </div>
   );
 }
 
