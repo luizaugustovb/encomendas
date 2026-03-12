@@ -33,12 +33,31 @@ export class TenantConfigService {
     });
   }
 
+  /** Codifica credenciais da URL RTSP para evitar problemas com @ na senha */
+  sanitizeRtspUrl(url: string): string {
+    const match = url.match(/^(rtsp:\/\/)(.*)/i);
+    if (!match) return url;
+    const [, scheme, rest] = match;
+    const lastAtIdx = rest.lastIndexOf('@');
+    if (lastAtIdx === -1) return url; // sem credenciais
+    const credsPart = rest.substring(0, lastAtIdx);
+    const hostPart = rest.substring(lastAtIdx + 1);
+    const colonIdx = credsPart.indexOf(':');
+    if (colonIdx === -1) {
+      return `${scheme}${encodeURIComponent(credsPart)}@${hostPart}`;
+    }
+    const user = credsPart.substring(0, colonIdx);
+    const pass = credsPart.substring(colonIdx + 1);
+    return `${scheme}${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${hostPart}`;
+  }
+
   async getRtspCameraUrl(tenantId: string): Promise<string | null> {
     const config = await this.prisma.tenantConfig.findUnique({
       where: { tenantId },
       select: { rtspCameraUrl: true },
     });
-    return config?.rtspCameraUrl || null;
+    const url = config?.rtspCameraUrl || null;
+    return url ? this.sanitizeRtspUrl(url) : null;
   }
 
   async getWhatsappToken(tenantId: string): Promise<string> {

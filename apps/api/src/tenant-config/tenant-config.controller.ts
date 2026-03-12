@@ -112,7 +112,7 @@ export class TenantConfigController {
       return { success: false, message: 'URL da câmera RTSP não configurada', ping: null, hasImage: false };
     }
 
-    const url = config.rtspCameraUrl;
+    const url = this.configService.sanitizeRtspUrl(config.rtspCameraUrl);
     let ping: number | null = null;
     let hasImage = false;
     let contentType = '';
@@ -157,12 +157,19 @@ export class TenantConfigController {
         hasImage = response.status === 200 && response.data?.length > 0;
       }
     } catch (err: any) {
+      const isLocalIp = /172\.16\.|192\.168\.|10\./.test(url);
       if (err.code === 'ECONNREFUSED') {
         errorMsg = 'Conexão recusada - verifique o IP e a porta';
       } else if (err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED') {
-        errorMsg = 'Timeout - câmera não respondeu em 10s';
+        errorMsg = isLocalIp
+          ? 'Timeout - câmera em IP local (192.168.x/10.x). O servidor na nuvem não consegue acessar IPs de rede local. Use um IP público ou DDNS.'
+          : 'Timeout - câmera não respondeu em 10s';
       } else if (err.code === 'ENOTFOUND') {
         errorMsg = 'Host não encontrado - verifique a URL';
+      } else if (err.message?.includes('Host is unreachable') || err.message?.includes('Network is unreachable')) {
+        errorMsg = isLocalIp
+          ? 'Host inacessível - câmera em IP local (192.168.x/10.x). O servidor na nuvem não consegue acessar IPs de rede local. Use um IP público, DDNS ou VPN.'
+          : 'Host inacessível - verifique se a câmera está online';
       } else {
         errorMsg = err.message || 'Erro desconhecido';
       }
@@ -195,7 +202,7 @@ export class TenantConfigController {
     }
 
     try {
-      const cameraUrl = config.rtspCameraUrl;
+      const cameraUrl = this.configService.sanitizeRtspUrl(config.rtspCameraUrl);
 
       // Se for URL RTSP, capturar frame com ffmpeg
       if (cameraUrl.startsWith('rtsp://')) {
