@@ -49,6 +49,10 @@ COPY --from=builder /app/package.json ./
 # Create uploads directories
 RUN mkdir -p uploads/deliveries uploads/photos uploads/withdrawals
 
+# Entrypoint: roda prisma db push antes de iniciar
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x entrypoint.sh
+
 EXPOSE 3001
 
-CMD ["node", "dist/src/main"]
+CMD ["sh", "entrypoint.sh"]
