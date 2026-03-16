@@ -52,9 +52,11 @@ export class TenantsService {
       await tx.unit.deleteMany({ where: { tenantId: id } });
       // 5. Delete locations
       await tx.location.deleteMany({ where: { tenantId: id } });
-      // 6. Delete tenant config
+      // 6. Delete equipment
+      await tx.equipment.deleteMany({ where: { tenantId: id } });
+      // 7. Delete tenant config
       await tx.tenantConfig.deleteMany({ where: { tenantId: id } });
-      // 7. Delete tenant
+      // 8. Delete tenant
       await tx.tenant.delete({ where: { id } });
     });
 
