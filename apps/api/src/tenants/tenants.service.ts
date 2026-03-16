@@ -39,27 +39,44 @@ export class TenantsService {
     }
 
     // Cascade delete all related records in correct order
-    await this.prisma.$transaction(async (tx) => {
-      // 1. Delete delivery events from deliveries of this tenant
-      await tx.deliveryEvent.deleteMany({
-        where: { delivery: { tenantId: id } },
-      });
-      // 2. Delete deliveries
-      await tx.delivery.deleteMany({ where: { tenantId: id } });
-      // 3. Delete users (removes unit relations)
-      await tx.user.deleteMany({ where: { tenantId: id } });
-      // 4. Delete units
-      await tx.unit.deleteMany({ where: { tenantId: id } });
-      // 5. Delete locations
-      await tx.location.deleteMany({ where: { tenantId: id } });
-      // 6. Delete equipment
-      await tx.equipment.deleteMany({ where: { tenantId: id } });
-      // 7. Delete tenant config
-      await tx.tenantConfig.deleteMany({ where: { tenantId: id } });
-      // 8. Delete tenant
-      await tx.tenant.delete({ where: { id } });
-    });
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // 1. Delete delivery events associated with deliveries of this tenant
+        await tx.deliveryEvent.deleteMany({
+          where: { delivery: { tenantId: id } },
+        });
 
-    return { message: 'Condomínio e todos os dados relacionados foram excluídos permanentemente.' };
+        // 2. Delete delivery events associated with users of this tenant (audit logs)
+        await tx.deliveryEvent.deleteMany({
+          where: { user: { tenantId: id } },
+        });
+
+        // 3. Delete deliveries
+        await tx.delivery.deleteMany({ where: { tenantId: id } });
+
+        // 4. Delete users (this handles their relations to units)
+        await tx.user.deleteMany({ where: { tenantId: id } });
+
+        // 5. Delete units
+        await tx.unit.deleteMany({ where: { tenantId: id } });
+
+        // 6. Delete locations
+        await tx.location.deleteMany({ where: { tenantId: id } });
+
+        // 7. Delete equipment
+        await tx.equipment.deleteMany({ where: { tenantId: id } });
+
+        // 8. Delete tenant config
+        await tx.tenantConfig.deleteMany({ where: { tenantId: id } });
+
+        // 9. Delete tenant
+        await tx.tenant.delete({ where: { id } });
+      });
+
+      return { message: 'Condomínio e todos os dados relacionados foram excluídos permanentemente.' };
+    } catch (error: any) {
+      console.error('[TenantsService] Erro ao excluir condomínio permanentemente:', error);
+      throw new BadRequestException(`Erro ao excluir condomínio: ${error?.message || 'Erro desconhecido'}`);
+    }
   }
 }
