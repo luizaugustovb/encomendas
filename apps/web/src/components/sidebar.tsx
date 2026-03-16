@@ -72,7 +72,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
   { href: "/dashboard/deliveries", label: "Encomendas", icon: Package, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
   { href: "/dashboard/tenants", label: "Condomínios", icon: Shield, roles: ["ADMIN"] },
-  { href: "/dashboard/settings", label: "Configurações", icon: Settings, roles: ["ADMIN_CONDOMINIO"] },
+  { href: "/dashboard/settings", label: "Configurações", icon: Settings, roles: ["ADMIN"] },
   { href: "/dashboard/equipment", label: "Equipamentos", icon: Wifi, roles: ["ADMIN", "ADMIN_CONDOMINIO", "PORTEIRO", "ZELADOR"] },
   { href: "/totem", label: "Totem", icon: Monitor, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },
   { href: "/dashboard/audit", label: "Logs de Auditoria", icon: FileSearch, roles: ["ADMIN", "ADMIN_CONDOMINIO"] },

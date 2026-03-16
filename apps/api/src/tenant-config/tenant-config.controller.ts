@@ -36,8 +36,7 @@ export class TenantConfigController {
     private hikvisionService: HikvisionService,
   ) {}
 
-  @Get()
-  @Roles('ADMIN', 'ADMIN_CONDOMINIO')
+  @Roles('ADMIN')
   getConfig(@TenantId() tenantId: string, @CurrentUser() user: any) {
     const effectiveTenantId = user.role === 'ADMIN' ? tenantId : tenantId;
     return this.configService.findByTenantId(effectiveTenantId);
@@ -50,7 +49,7 @@ export class TenantConfigController {
   }
 
   @Put()
-  @Roles('ADMIN', 'ADMIN_CONDOMINIO')
+  @Roles('ADMIN')
   updateConfig(
     @Body() dto: UpdateTenantConfigDto,
     @TenantId() tenantId: string,
@@ -104,7 +103,7 @@ export class TenantConfigController {
 
   // Test RTSP Camera
   @Post('test/rtsp')
-  @Roles('ADMIN', 'ADMIN_CONDOMINIO')
+  @Roles('ADMIN')
   async testRtsp(@TenantId() jwtTenantId: string, @CurrentUser() user: any, @Body() body?: { tenantId?: string }) {
     const tenantId = (user.role === 'ADMIN' && body?.tenantId) ? body.tenantId : jwtTenantId;
     const config = await this.configService.findByTenantId(tenantId);
@@ -187,7 +186,7 @@ export class TenantConfigController {
 
   // Proxy RTSP autenticado (para preview na tela de configurações)
   @Get('rtsp-proxy')
-  @Roles('ADMIN', 'ADMIN_CONDOMINIO')
+  @Roles('ADMIN')
   async rtspProxyAuth(
     @TenantId() jwtTenantId: string,
     @CurrentUser() user: any,

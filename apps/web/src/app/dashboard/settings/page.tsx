@@ -22,7 +22,7 @@ import {
 import {
   Settings, Wifi, Save, Phone, Loader2, CheckCircle, XCircle, Video,
   Plus, Pencil, Trash2, WifiOff, TestTube2, Users, Building2, MapPin,
-  Camera, UserCircle, PlusCircle, RotateCcw, AlertTriangle,
+  Camera, UserCircle, PlusCircle, RotateCcw, AlertTriangle, ShieldX,
 } from "lucide-react";
 
 const roleLabels: Record<string, string> = {
@@ -64,6 +64,18 @@ export default function SettingsPage() {
   ];
 
   if (!token) return null;
+
+  if (user?.role !== "ADMIN") {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <ShieldX className="h-12 w-12 text-destructive opacity-50" />
+        <div>
+          <h2 className="text-xl font-semibold">Acesso Restrito</h2>
+          <p className="text-muted-foreground">Esta página está disponível apenas para o Administrador Master.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
