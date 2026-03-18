@@ -246,26 +246,27 @@ export class DeliveriesService {
       }
     }
 
-    // Destrava porta ao confirmar retirada
-    try {
-      const doorResult = await this.hikvisionService.openDoor(delivery.tenantId, 1);
-      await this.prisma.deliveryEvent.create({
-        data: {
-          deliveryId: delivery.id,
-          userId,
-          type: 'DOOR_ACCESS',
-          metadata: JSON.stringify({
-            source: 'DASHBOARD',
-            tenantId: delivery.tenantId,
-            doorNo: 1,
-            success: doorResult.success,
-            message: doorResult.message,
-          }),
-        },
-      });
-    } catch (error: any) {
-      this.logger.warn(`[Withdraw] Falha ao destravar porta do tenant ${delivery.tenantId}: ${error.message}`);
-    }
+    // Destrava porta ao confirmar retirada (fire & forget — não bloqueia a resposta)
+    this.hikvisionService.openDoor(delivery.tenantId, 1)
+      .then((doorResult) =>
+        this.prisma.deliveryEvent.create({
+          data: {
+            deliveryId: delivery.id,
+            userId,
+            type: 'DOOR_ACCESS',
+            metadata: JSON.stringify({
+              source: 'DASHBOARD',
+              tenantId: delivery.tenantId,
+              doorNo: 1,
+              success: doorResult.success,
+              message: doorResult.message,
+            }),
+          },
+        }),
+      )
+      .catch((error: any) =>
+        this.logger.warn(`[Withdraw] Falha ao destravar porta do tenant ${delivery.tenantId}: ${error.message}`),
+      );
 
     // Remove moradores da unidade do equipamento Hikvision se não houver mais encomendas pendentes
     this.hikvisionService.unsyncUnitResidentsIfNoPending(delivery.tenantId, delivery.unitId).catch((err) => {

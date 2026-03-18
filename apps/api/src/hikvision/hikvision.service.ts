@@ -618,13 +618,18 @@ export class HikvisionService implements OnModuleInit {
 
   /**
    * Abre porta remota via ISAPI
+   * Usa a tabela Equipment (não TenantConfig) para buscar o dispositivo.
    */
   async openDoor(
     tenantId: string,
     doorNo: number = 1,
   ): Promise<{ success: boolean; message: string }> {
-    const config = await this.getConfigOrFail(tenantId);
-    return this.openDoorWithConfig(String(doorNo), config);
+    const equipments = await this.getTenantEquipments(tenantId);
+    if (equipments.length === 0) {
+      return { success: false, message: 'Nenhum equipamento Hikvision configurado para este condomínio' };
+    }
+    // Abre no primeiro equipamento ativo (controle de acesso principal)
+    return this.openDoorWithConfig(String(doorNo), equipments[0]);
   }
 
   /**
