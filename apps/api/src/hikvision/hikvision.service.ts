@@ -91,6 +91,30 @@ export class HikvisionService implements OnModuleInit {
   // ─── Helpers ───────────────────────────────────────────────────────────
 
   /**
+   * Traduz erros de rede em mensagens legíveis
+   */
+  private translateConnectionError(error: any, ip: string, port: number): string {
+    const code = error.code || error.cause?.code;
+    const portStr = `${ip}:${port}`;
+    switch (code) {
+      case 'ECONNRESET':
+        return `Conexão recusada pelo dispositivo em ${portStr}. Verifique se o dispositivo usa HTTPS (porta 443) e configure o IP com https://, ou confirme a porta correta.`;
+      case 'ECONNREFUSED':
+        return `Dispositivo recusou conexão em ${portStr}. Verifique IP e porta nas configurações do equipamento.`;
+      case 'ETIMEDOUT':
+      case 'ECONNABORTED':
+        return `Timeout ao conectar em ${portStr}. O dispositivo não respondeu a tempo.`;
+      case 'EHOSTUNREACH':
+      case 'ENETUNREACH':
+        return `Dispositivo inacessível em ${portStr}. Verifique a rede ou VPN/WireGuard.`;
+      case 'ENOTFOUND':
+        return `Endereço ${ip} não encontrado. Verifique o IP ou hostname configurado.`;
+      default:
+        return error.message || 'Erro desconhecido';
+    }
+  }
+
+  /**
    * Calcula o header Digest Authorization a partir do WWW-Authenticate challenge
    */
   private computeDigestAuth(
@@ -129,7 +153,7 @@ export class HikvisionService implements OnModuleInit {
     return header;
   }
 
-  private createClient(config: HikvisionConfig): AxiosInstance {
+  private createClient(config: HikvisionConfig, timeoutMs = 45000): AxiosInstance {
     const baseURL = config.ip.startsWith('http')
       ? config.ip
       : `http://${config.ip}${config.port === 80 ? '' : ':' + config.port}`;
@@ -139,7 +163,7 @@ export class HikvisionService implements OnModuleInit {
 
     const client = axios.create({
       baseURL,
-      timeout: 45000,
+      timeout: timeoutMs,
       headers: { 'Content-Type': 'application/json' },
       validateStatus: (status) => status < 500,
     });
@@ -592,8 +616,10 @@ export class HikvisionService implements OnModuleInit {
     doorId: string,
     config: HikvisionConfig,
   ): Promise<{ success: boolean; message: string }> {
-    const client = this.createClient(config);
-    const target = `${config.ip}:${config.port || 80}`;
+    // Timeout curto para operações de porta (não pode ficar 45s no ar)
+    const client = this.createClient(config, 10000);
+    const port = (config as any).port || 80;
+    const target = `${config.ip}:${port}`;
 
     try {
       await client.request({
@@ -606,9 +632,9 @@ export class HikvisionService implements OnModuleInit {
       this.logger.log(`Porta ${doorId} aberta via ${target}`);
       return { success: true, message: `Porta ${doorId} aberta com sucesso` };
     } catch (error) {
-      const msg = error.message || 'Erro desconhecido';
+      const msg = this.translateConnectionError(error, config.ip, port);
       this.logger.error(`Erro ao abrir porta ${doorId} em ${target} (user: ${config.user}): ${msg}`);
-      return { success: false, message: `Erro ao abrir porta: ${msg}` };
+      return { success: false, message: msg };
     }
   }
 
@@ -620,7 +646,8 @@ export class HikvisionService implements OnModuleInit {
     doorNo: number = 1,
   ): Promise<{ success: boolean; message: string }> {
     const config = await this.getConfigOrFail(tenantId);
-    const client = this.createClient(config);
+    const client = this.createClient(config, 10000);
+    const port = (config as any).port || 80;
 
     try {
       await client.request({
@@ -632,7 +659,7 @@ export class HikvisionService implements OnModuleInit {
 
       return { success: true, message: `Porta ${doorNo} fechada com sucesso` };
     } catch (error) {
-      return { success: false, message: `Erro ao fechar porta: ${error.message}` };
+      return { success: false, message: this.translateConnectionError(error, config.ip, port) };
     }
   }
 
@@ -644,7 +671,8 @@ export class HikvisionService implements OnModuleInit {
     doorNo: number = 1,
   ): Promise<{ success: boolean; message: string }> {
     const config = await this.getConfigOrFail(tenantId);
-    const client = this.createClient(config);
+    const client = this.createClient(config, 10000);
+    const port = (config as any).port || 80;
 
     try {
       await client.request({
@@ -656,7 +684,7 @@ export class HikvisionService implements OnModuleInit {
 
       return { success: true, message: `Porta ${doorNo} em modo permanentemente aberta` };
     } catch (error) {
-      return { success: false, message: `Erro: ${error.message}` };
+      return { success: false, message: this.translateConnectionError(error, config.ip, port) };
     }
   }
 
