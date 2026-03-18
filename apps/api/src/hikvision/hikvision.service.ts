@@ -6,8 +6,12 @@ import axios, { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as https from 'https';
 import FormData from 'form-data';
 import sharp from 'sharp';
+
+// Agente HTTPS que ignora certificados autoassinados (comum em dispositivos Hikvision)
+const httpsAgentInsecure = new https.Agent({ rejectUnauthorized: false });
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
 
@@ -98,7 +102,7 @@ export class HikvisionService implements OnModuleInit {
     const portStr = `${ip}:${port}`;
     switch (code) {
       case 'ECONNRESET':
-        return `Conexão recusada pelo dispositivo em ${portStr}. Verifique se o dispositivo usa HTTPS (porta 443) e configure o IP com https://, ou confirme a porta correta.`;
+        return `Conexão resetada pelo dispositivo em ${portStr}. Se a porta for 443, o sistema já usa HTTPS automaticamente. Verifique se as credenciais estão corretas.`;
       case 'ECONNREFUSED':
         return `Dispositivo recusou conexão em ${portStr}. Verifique IP e porta nas configurações do equipamento.`;
       case 'ETIMEDOUT':
@@ -109,6 +113,10 @@ export class HikvisionService implements OnModuleInit {
         return `Dispositivo inacessível em ${portStr}. Verifique a rede ou VPN/WireGuard.`;
       case 'ENOTFOUND':
         return `Endereço ${ip} não encontrado. Verifique o IP ou hostname configurado.`;
+      case 'DEPTH_ZERO_SELF_SIGNED_CERT':
+      case 'CERT_HAS_EXPIRED':
+      case 'ERR_TLS_CERT_ALTNAME_INVALID':
+        return `Erro de certificado SSL em ${portStr}. Isso é esperado em dispositivos Hikvision — tente novamente.`;
       default:
         return error.message || 'Erro desconhecido';
     }
@@ -154,18 +162,28 @@ export class HikvisionService implements OnModuleInit {
   }
 
   private createClient(config: HikvisionConfig, timeoutMs = 45000): AxiosInstance {
-    const baseURL = config.ip.startsWith('http')
-      ? config.ip
-      : `http://${config.ip}${config.port === 80 ? '' : ':' + config.port}`;
+    const port = config.port || 80;
+    const isHttps = port === 443 || config.ip.startsWith('https://');
+
+    let baseURL: string;
+    if (config.ip.startsWith('http://') || config.ip.startsWith('https://')) {
+      baseURL = config.ip;
+    } else if (isHttps) {
+      baseURL = `https://${config.ip}${port === 443 ? '' : ':' + port}`;
+    } else {
+      baseURL = `http://${config.ip}${port === 80 ? '' : ':' + port}`;
+    }
 
     // Chave de cache baseada no IP:porta para não misturar nonces entre equipamentos diferentes
-    const cacheKey = `${config.ip}:${config.port || 80}`;
+    const cacheKey = `${config.ip}:${port}`;
 
     const client = axios.create({
       baseURL,
       timeout: timeoutMs,
       headers: { 'Content-Type': 'application/json' },
       validateStatus: (status) => status < 500,
+      // Permite certificados autoassinados (Hikvision usa self-signed por padrão)
+      httpsAgent: isHttps ? httpsAgentInsecure : undefined,
     });
 
     // Injeta auth cacheado se existir
