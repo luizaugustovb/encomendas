@@ -58,7 +58,7 @@ export class HikvisionService implements OnModuleInit {
   /** Map: tenantId → AbortController (para parar alertStream) */
   private activeStreams = new Map<string, AbortController>();
 
-  /** Cache de WWW-Authenticate por tenantId para evitar 401 em POSTs com corpo */
+  /** Cache de WWW-Authenticate por ip:porta para evitar 401 em POSTs com corpo */
   private authCache = new Map<string, string>();
 
   constructor(
@@ -134,6 +134,9 @@ export class HikvisionService implements OnModuleInit {
       ? config.ip
       : `http://${config.ip}${config.port === 80 ? '' : ':' + config.port}`;
 
+    // Chave de cache baseada no IP:porta para não misturar nonces entre equipamentos diferentes
+    const cacheKey = `${config.ip}:${config.port || 80}`;
+
     const client = axios.create({
       baseURL,
       timeout: 45000,
@@ -143,9 +146,8 @@ export class HikvisionService implements OnModuleInit {
 
     // Injeta auth cacheado se existir
     client.interceptors.request.use((req) => {
-      const tenantId = (config as any).tenantId;
-      if (tenantId && this.authCache.has(tenantId) && !req.headers['Authorization']) {
-        const wwwAuth = this.authCache.get(tenantId)!;
+      if (this.authCache.has(cacheKey) && !req.headers['Authorization']) {
+        const wwwAuth = this.authCache.get(cacheKey)!;
         const url = new URL(req.url!, req.baseURL);
         const uri = url.pathname + url.search;
         req.headers['Authorization'] = this.computeDigestAuth(
@@ -163,8 +165,8 @@ export class HikvisionService implements OnModuleInit {
     client.interceptors.response.use(async (response) => {
       if (response.status === 401 && response.headers['www-authenticate']) {
         const wwwAuth = response.headers['www-authenticate'];
-        const tenantId = (config as any).tenantId;
-        if (tenantId) this.authCache.set(tenantId, wwwAuth);
+        // Atualiza cache com o novo desafio (nonce) por IP:porta
+        this.authCache.set(cacheKey, wwwAuth);
 
         const originalConfig = response.config;
 
@@ -189,15 +191,43 @@ export class HikvisionService implements OnModuleInit {
         }
 
         // Agora queremos que erros reais (4xx/5xx) sejam lançados normalmente
-        originalConfig.validateStatus = (status) => status >= 200 && status < 300;
-        return axios.request(originalConfig);
+        originalConfig.validateStatus = (status) => status < 500;
+
+        try {
+          const retryResponse = await axios.request(originalConfig);
+
+          // Se o retry também retornou 401, as credenciais estão erradas
+          if (retryResponse.status === 401) {
+            // Invalida cache para forçar novo desafio na próxima vez
+            this.authCache.delete(cacheKey);
+            const error: any = new Error(`Credenciais inválidas para ${config.ip} (usuário: ${config.user})`);
+            error.response = retryResponse;
+            throw error;
+          }
+
+          if (retryResponse.status >= 400) {
+            const error: any = new Error(`Request failed with status ${retryResponse.status}`);
+            error.response = retryResponse;
+            throw error;
+          }
+
+          return retryResponse;
+        } catch (retryError: any) {
+          // Propaga o erro melhorado
+          if (retryError.response?.status === 401 || retryError.message?.includes('Credenciais')) {
+            this.authCache.delete(cacheKey);
+          }
+          if (retryError.code === 'ERR_BAD_RESPONSE' || retryError.response?.status === 401) {
+            throw new Error(`Credenciais inválidas para ${config.ip} (usuário: ${config.user})`);
+          }
+          throw retryError;
+        }
       }
 
       // Se não for 401, verifica se é um status de erro
       if (response.status >= 400) {
         const error: any = new Error(`Request failed with status ${response.status}`);
         error.response = response;
-        error.code = response.status === 401 ? 'ERR_UNAUTHORIZED' : undefined;
         throw error;
       }
 
@@ -563,6 +593,7 @@ export class HikvisionService implements OnModuleInit {
     config: HikvisionConfig,
   ): Promise<{ success: boolean; message: string }> {
     const client = this.createClient(config);
+    const target = `${config.ip}:${config.port || 80}`;
 
     try {
       await client.request({
@@ -572,11 +603,12 @@ export class HikvisionService implements OnModuleInit {
         data: '<RemoteControlDoor><cmd>open</cmd></RemoteControlDoor>',
       });
 
-      this.logger.log(`Porta ${doorId} aberta via ${config.ip}:${config.port}`);
+      this.logger.log(`Porta ${doorId} aberta via ${target}`);
       return { success: true, message: `Porta ${doorId} aberta com sucesso` };
     } catch (error) {
-      this.logger.error(`Erro ao abrir porta ${doorId}: ${error.message}`);
-      return { success: false, message: `Erro ao abrir porta: ${error.message}` };
+      const msg = error.message || 'Erro desconhecido';
+      this.logger.error(`Erro ao abrir porta ${doorId} em ${target} (user: ${config.user}): ${msg}`);
+      return { success: false, message: `Erro ao abrir porta: ${msg}` };
     }
   }
 
