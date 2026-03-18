@@ -1167,6 +1167,159 @@ export class HikvisionService implements OnModuleInit {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  // 8.2 SINCRONIZAÇÃO AUTOMÁTICA POR EQUIPAMENTO (FLUXO DE CRIAÇÃO/REMOÇÃO)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Retorna todos os equipamentos Hikvision ativos e habilitados do tenant
+   */
+  private async getTenantEquipments(tenantId: string): Promise<HikvisionConfig[]> {
+    const equipments = await this.prisma.equipment.findMany({
+      where: { tenantId, active: true, enabled: true, type: 'HIKVISION' },
+    });
+    return equipments
+      .filter((eq) => eq.hikvisionIp)
+      .map((eq) => ({
+        ip: eq.hikvisionIp!,
+        port: eq.hikvisionPort || 80,
+        user: eq.hikvisionUser || 'admin',
+        password: eq.hikvisionPassword || '',
+        tenantId,
+      } as HikvisionConfig & { tenantId: string }));
+  }
+
+  /**
+   * Sincroniza um usuário para TODOS os equipamentos do condomínio.
+   * - SINDICO / PORTEIRO / ZELADOR / ADMIN_CONDOMINIO → sempre sincroniza
+   * - MORADOR → sincroniza apenas se chamado explicitamente (ex: ao cadastrar encomenda)
+   * Fire & forget — não lança exceção, apenas loga erros.
+   */
+  async syncUserToEquipments(userId: string, tenantId: string): Promise<void> {
+    let user: any;
+    try {
+      user = await this.prisma.user.findFirst({ where: { id: userId, tenantId } });
+      if (!user) return;
+
+      const equipments = await this.getTenantEquipments(tenantId);
+      if (equipments.length === 0) {
+        this.logger.debug(`[AutoSync] Tenant ${tenantId} sem equipamentos Hikvision, pulando`);
+        return;
+      }
+
+      // Garante employeeNo
+      let employeeNo = user.hikvisionEmployeeNo;
+      if (!employeeNo) {
+        employeeNo = await this.generateEmployeeNo(tenantId);
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { hikvisionEmployeeNo: employeeNo },
+        });
+      }
+
+      const photoFullPath = user.photoUrl
+        ? path.join(process.cwd(), user.photoUrl.replace(/^\//, ''))
+        : null;
+
+      for (const config of equipments) {
+        try {
+          const client = this.createClient(config as any, 10000);
+          // Warm-up Digest Auth
+          await client.get('/ISAPI/System/deviceInfo').catch(() => {});
+
+          const createResult = await this.createDeviceUser(config, { employeeNo, name: user.name });
+          if (!createResult.success) {
+            this.logger.warn(`[AutoSync] Falha ao criar ${user.name} em ${config.ip}: ${createResult.error}`);
+            continue;
+          }
+
+          // Delay para dispositivo processar
+          await new Promise((r) => setTimeout(r, 1500));
+
+          // Envia foto facial se existir
+          if (photoFullPath && fs.existsSync(photoFullPath)) {
+            const faceResult = await this.uploadFacePhoto(config, employeeNo, photoFullPath);
+            if (!faceResult.success) {
+              this.logger.warn(`[AutoSync] Face de ${user.name} falhou em ${config.ip}: ${faceResult.error}`);
+            } else {
+              this.logger.log(`[AutoSync] Face de ${user.name} enviada para ${config.ip}`);
+            }
+          }
+
+          this.logger.log(`[AutoSync] ${user.name} criado em ${config.ip}:${config.port}`);
+        } catch (eqError) {
+          this.logger.error(`[AutoSync] Erro ao sincronizar ${user.name} para ${config.ip}: ${eqError.message}`);
+        }
+      }
+
+      // Marca como sincronizado no banco
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { hikvisionSynced: true },
+      });
+    } catch (error) {
+      this.logger.error(`[AutoSync] Erro geral ao sincronizar usuário ${userId}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Remove um usuário de TODOS os equipamentos do condomínio.
+   * Fire & forget — não lança exceção.
+   */
+  async unsyncUserFromEquipments(userId: string, tenantId: string): Promise<void> {
+    try {
+      const user = await this.prisma.user.findFirst({ where: { id: userId } });
+      if (!user || !user.hikvisionEmployeeNo) return;
+
+      const equipments = await this.getTenantEquipments(tenantId);
+
+      for (const config of equipments) {
+        try {
+          await this.deleteDeviceUser(config, user.hikvisionEmployeeNo);
+          await this.deleteFacePhoto(config, user.hikvisionEmployeeNo);
+          this.logger.log(`[AutoSync] ${user.name} removido de ${config.ip}`);
+        } catch (eqError) {
+          this.logger.warn(`[AutoSync] Falha ao remover ${user.name} de ${config.ip}: ${eqError.message}`);
+        }
+      }
+
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { hikvisionSynced: false, hikvisionEmployeeNo: null },
+      });
+    } catch (error) {
+      this.logger.error(`[AutoSync] Erro ao remover usuário ${userId} dos equipamentos: ${error.message}`);
+    }
+  }
+
+  /**
+   * Re-envia apenas a foto facial para todos os equipamentos.
+   * Usado quando a foto do usuário é atualizada.
+   */
+  async resyncFaceToEquipments(userId: string, tenantId: string): Promise<void> {
+    try {
+      const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId } });
+      if (!user || !user.hikvisionEmployeeNo || !user.photoUrl) return;
+
+      const photoFullPath = path.join(process.cwd(), user.photoUrl.replace(/^\//, ''));
+      if (!fs.existsSync(photoFullPath)) return;
+
+      const equipments = await this.getTenantEquipments(tenantId);
+      for (const config of equipments) {
+        try {
+          const faceResult = await this.uploadFacePhoto(config, user.hikvisionEmployeeNo, photoFullPath);
+          if (faceResult.success) {
+            this.logger.log(`[AutoSync] Face de ${user.name} atualizada em ${config.ip}`);
+          }
+        } catch (eqError) {
+          this.logger.warn(`[AutoSync] Falha ao atualizar face em ${config.ip}: ${eqError.message}`);
+        }
+      }
+    } catch (error) {
+      this.logger.error(`[AutoSync] Erro ao re-sincronizar face do usuário ${userId}: ${error.message}`);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   // 8.5 SINCRONIZAÇÃO DE MORADORES POR UNIDADE (FLUXO DE ENCOMENDAS)
   // ═══════════════════════════════════════════════════════════════════════
 
@@ -1178,7 +1331,12 @@ export class HikvisionService implements OnModuleInit {
     tenantId: string,
     unitId: string,
   ): Promise<{ synced: number; failed: number; errors: string[] }> {
-    const config = await this.getConfigOrFail(tenantId);
+    const equipments = await this.getTenantEquipments(tenantId);
+    if (equipments.length === 0) {
+      this.logger.debug(`[SyncUnit] Tenant ${tenantId} sem equipamentos Hikvision, pulando`);
+      return { synced: 0, failed: 0, errors: [] };
+    }
+
     const residents = await this.prisma.user.findMany({
       where: { tenantId, unitId, role: 'MORADOR', active: true },
     });
@@ -1186,7 +1344,6 @@ export class HikvisionService implements OnModuleInit {
     const result = { synced: 0, failed: 0, errors: [] as string[] };
 
     for (const resident of residents) {
-      // Pula se já está sincronizado no equipamento
       if (resident.hikvisionSynced) {
         this.logger.log(`[SyncUnit] Morador ${resident.name} já sincronizado, pulando`);
         result.synced++;
@@ -1203,42 +1360,44 @@ export class HikvisionService implements OnModuleInit {
           });
         }
 
-        // Cria usuário no dispositivo
-        const createResult = await this.createDeviceUser(config, {
-          employeeNo,
-          name: resident.name,
-        });
+        const photoFullPath = resident.photoUrl
+          ? path.join(process.cwd(), resident.photoUrl.replace(/^\//, ''))
+          : null;
 
-        if (!createResult.success) {
-          result.failed++;
-          result.errors.push(`${resident.name}: ${createResult.error}`);
-          continue;
-        }
-
-        // Delay para o dispositivo processar
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // Envia foto facial se tiver
-        if (resident.photoUrl) {
-          const photoFullPath = path.join(
-            process.cwd(), resident.photoUrl.replace(/^\//, ''),
-          );
-          if (fs.existsSync(photoFullPath)) {
-            const faceResult = await this.uploadFacePhoto(config, employeeNo, photoFullPath);
-            if (!faceResult.success) {
-              this.logger.warn(`[SyncUnit] Face de ${resident.name} falhou: ${faceResult.error}`);
+        let synced = false;
+        for (const config of equipments) {
+          try {
+            const createResult = await this.createDeviceUser(config, { employeeNo, name: resident.name });
+            if (!createResult.success) {
+              this.logger.warn(`[SyncUnit] Falha ao criar ${resident.name} em ${config.ip}: ${createResult.error}`);
+              continue;
             }
+
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            if (photoFullPath && fs.existsSync(photoFullPath)) {
+              const faceResult = await this.uploadFacePhoto(config, employeeNo, photoFullPath);
+              if (!faceResult.success) {
+                this.logger.warn(`[SyncUnit] Face de ${resident.name} falhou em ${config.ip}: ${faceResult.error}`);
+              }
+            }
+            synced = true;
+          } catch (eqErr) {
+            this.logger.error(`[SyncUnit] Erro ao sincronizar ${resident.name} para ${config.ip}: ${eqErr.message}`);
           }
         }
 
-        // Marca como sincronizado
-        await this.prisma.user.update({
-          where: { id: resident.id },
-          data: { hikvisionSynced: true },
-        });
-
-        result.synced++;
-        this.logger.log(`[SyncUnit] Morador ${resident.name} sincronizado (employeeNo: ${employeeNo})`);
+        if (synced) {
+          await this.prisma.user.update({
+            where: { id: resident.id },
+            data: { hikvisionSynced: true },
+          });
+          result.synced++;
+          this.logger.log(`[SyncUnit] Morador ${resident.name} sincronizado (employeeNo: ${employeeNo})`);
+        } else {
+          result.failed++;
+          result.errors.push(`${resident.name}: Falha em todos os equipamentos`);
+        }
       } catch (error) {
         result.failed++;
         result.errors.push(`${resident.name}: ${error.message}`);
@@ -1273,7 +1432,7 @@ export class HikvisionService implements OnModuleInit {
     }
 
     // Não há mais pendentes → remove todos os moradores da unidade do equipamento
-    const config = await this.getConfigOrFail(tenantId);
+    const equipments = await this.getTenantEquipments(tenantId);
     const residents = await this.prisma.user.findMany({
       where: { tenantId, unitId, role: 'MORADOR', hikvisionSynced: true },
     });
@@ -1283,8 +1442,14 @@ export class HikvisionService implements OnModuleInit {
       if (!resident.hikvisionEmployeeNo) continue;
 
       try {
-        await this.deleteDeviceUser(config, resident.hikvisionEmployeeNo);
-        await this.deleteFacePhoto(config, resident.hikvisionEmployeeNo);
+        for (const config of equipments) {
+          try {
+            await this.deleteDeviceUser(config, resident.hikvisionEmployeeNo);
+            await this.deleteFacePhoto(config, resident.hikvisionEmployeeNo);
+          } catch (eqErr) {
+            this.logger.warn(`[UnsyncUnit] Falha ao remover ${resident.name} de ${config.ip}: ${eqErr.message}`);
+          }
+        }
 
         await this.prisma.user.update({
           where: { id: resident.id },
@@ -1292,7 +1457,7 @@ export class HikvisionService implements OnModuleInit {
         });
 
         removed++;
-        this.logger.log(`[UnsyncUnit] Morador ${resident.name} removido do equipamento`);
+        this.logger.log(`[UnsyncUnit] Morador ${resident.name} removido dos equipamentos`);
       } catch (error) {
         this.logger.error(`[UnsyncUnit] Erro ao remover ${resident.name}: ${error.message}`);
       }
