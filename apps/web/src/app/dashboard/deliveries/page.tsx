@@ -272,6 +272,7 @@ export default function DeliveriesPage() {
                       value={withdrawSearch}
                       onChange={(e) => { setWithdrawSearch(e.target.value); setOpenWithdrawDropdown(true); }}
                       onFocus={() => setOpenWithdrawDropdown(true)}
+                      onBlur={() => setTimeout(() => setOpenWithdrawDropdown(false), 150)}
                     />
                     {selectedWithdrawUser && (
                       <div className="mt-1 text-xs text-muted-foreground px-1">
@@ -324,6 +325,7 @@ export default function DeliveriesPage() {
                       value={userSearch}
                       onChange={(e) => { setUserSearch(e.target.value); setOpenUserDropdown(true); if (!e.target.value) setFormUserId(""); }}
                       onFocus={() => setOpenUserDropdown(true)}
+                      onBlur={() => setTimeout(() => setOpenUserDropdown(false), 150)}
                     />
                     {selectedUser && (
                       <div className="mt-1 text-xs text-muted-foreground px-1">
