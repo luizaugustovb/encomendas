@@ -69,10 +69,14 @@ export const api = {
   },
   withdrawDelivery: (data: { userId: string; qrcode: string }, token: string) =>
     fetchApi('/deliveries/withdraw', { method: 'POST', body: JSON.stringify(data), token }),
-  getDeliveryLabel: (id: string, token: string, format: 'a4' | 'thermal' | 'sticker' = 'a4') =>
+  getDeliveryLabel: (id: string, token: string, format: 'thermal' | 'sticker' = 'thermal') =>
     fetch(`${API_URL}/deliveries/${id}/label?format=${format}`, {
       headers: { Authorization: `Bearer ${token}` },
     }).then((r) => r.blob()),
+  deleteDelivery: (id: string, token: string) =>
+    fetchApi(`/deliveries/${id}`, { method: 'DELETE', token }),
+  updateDelivery: (id: string, data: { description?: string; locationId?: string }, token: string) =>
+    fetchApi(`/deliveries/${id}`, { method: 'PATCH', body: JSON.stringify(data), token }),
   sendWhatsapp: (id: string, token: string) =>
     fetchApi(`/deliveries/${id}/whatsapp`, { method: 'POST', token }),
 

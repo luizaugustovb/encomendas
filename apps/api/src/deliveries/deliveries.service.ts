@@ -6,6 +6,26 @@ import { HikvisionService } from '../hikvision/hikvision.service';
 import { v4 as uuidv4 } from 'uuid';
 import * as QRCode from 'qrcode';
 import PDFDocument from 'pdfkit';
+import * as fs from 'fs';
+import * as path from 'path';
+
+/** Formata data no fuso America/Sao_Paulo */
+function formatDateBR(date: Date): string {
+  return date.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+/** Tenta carregar logo preta para impressão; retorna null se não encontrar */
+function loadLogoPreta(): Buffer | null {
+  const candidates = [
+    path.join(process.cwd(), 'public', 'logo-black.png'),
+    path.join(process.cwd(), 'uploads', 'logo-black.png'),
+    path.join(__dirname, '..', '..', '..', 'public', 'logo-black.png'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return fs.readFileSync(p);
+  }
+  return null;
+}
 
 @Injectable()
 export class DeliveriesService {
@@ -21,7 +41,7 @@ export class DeliveriesService {
   async findAll(tenantId: string, role?: string) {
     const isAdmin = role === 'ADMIN';
     return this.prisma.delivery.findMany({
-      where: isAdmin ? {} : { tenantId },
+      where: isAdmin ? { status: { not: 'DELETED' } } : { tenantId, status: { not: 'DELETED' } },
       include: {
         user: { select: { id: true, name: true, phone: true } },
         unit: true,
@@ -55,6 +75,9 @@ export class DeliveriesService {
     description?: string;
     photoUrl?: string;
   }) {
+    if (!data.photoUrl) {
+      throw new BadRequestException('Foto da encomenda é obrigatória');
+    }
     // Busca o morador completo para derivar unitId e tenantId
     const morador = await this.prisma.user.findUnique({
       where: { id: data.userId },
@@ -238,7 +261,7 @@ export class DeliveriesService {
         const whatsappToken = await this.tenantConfigService.getWhatsappToken(delivery.tenantId);
         await this.whatsappService.sendMessageWithToken(
           delivery.user.phone,
-          `✅ *Encomenda Retirada!*\n\nOlá ${delivery.user.name},\nSua encomenda (${delivery.code}) foi retirada com sucesso.\n\nData: ${new Date().toLocaleString('pt-BR')}`,
+          `✅ *Encomenda Retirada!*\n\nOlá ${delivery.user.name},\nSua encomenda (${delivery.code}) foi retirada com sucesso.\n\nData: ${formatDateBR(new Date())}`,
           whatsappToken,
         );
       } catch (error) {
@@ -276,7 +299,7 @@ export class DeliveriesService {
     return updated;
   }
 
-  async generateLabel(id: string, format: 'a4' | 'thermal' | 'sticker' = 'a4'): Promise<Buffer> {
+  async generateLabel(id: string, format: 'thermal' | 'sticker' = 'thermal'): Promise<Buffer> {
     const delivery = await this.prisma.delivery.findUnique({
       where: { id },
       include: { user: true, unit: true, location: true },
@@ -284,115 +307,96 @@ export class DeliveriesService {
 
     if (!delivery) throw new NotFoundException('Encomenda não encontrada');
 
-    if (format === 'thermal') {
-      return this.generateThermalLabel(delivery);
-    }
     if (format === 'sticker') {
       return this.generateStickerLabel(delivery);
     }
+    return this.generateThermalLabel(delivery);
+  }
 
-    // ===== FORMATO A4 =====
-    const qrBuffer = await QRCode.toBuffer(delivery.code, { width: 300 });
-    const unitLabel = delivery.unit.block
-      ? `${delivery.unit.type} ${delivery.unit.number} - Bloco ${delivery.unit.block}`
-      : `${delivery.unit.type} ${delivery.unit.number}`;
-    const dateStr = delivery.createdAt.toLocaleString('pt-BR');
+  // ── Helpers de layout para PDFKit ─────────────────────────────────────
 
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'A4', margin: 50 });
-      const chunks: Buffer[] = [];
-
-      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
-
-      const pw = doc.page.width - 100; // largura útil
-
-      // ── Título ──
-      doc.fontSize(28).font('Helvetica-Bold').text('ENCOMENDA', { align: 'center' });
-      doc.moveDown(0.8);
-
-      // ── Linha separadora ──
-      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).lineWidth(1).stroke('#999999');
-      doc.moveDown(0.8);
-
-      // ── Dados do morador (centralizados) ──
-      doc.fontSize(18).font('Helvetica-Bold').text(delivery.user.name, { align: 'center' });
+  /** Desenha logo preta no topo ou, se não houver arquivo, escreve cabeçalho textual */
+  private drawHeader(doc: any, pw: number, margin: number, usable: number) {
+    const logo = loadLogoPreta();
+    if (logo) {
+      const logoH = 36;
+      const logoW = logoH * 3; // proporção aproximada 3:1
+      doc.image(logo, (pw - logoW) / 2, doc.y, { width: logoW, height: logoH, fit: [logoW, logoH] });
       doc.moveDown(0.3);
-      doc.fontSize(14).font('Helvetica').text(unitLabel, { align: 'center' });
+    } else {
+      doc.fontSize(10).font('Helvetica-Bold').text('LAVB TECNOLOGIAS', { align: 'center', width: usable });
+      doc.fontSize(7).font('Helvetica').text('Sistema de Encomendas', { align: 'center', width: usable });
       doc.moveDown(0.3);
-      doc.fontSize(12).font('Helvetica').text(`Localização: ${delivery.location.code}${delivery.location.description ? ' - ' + delivery.location.description : ''}`, { align: 'center' });
-      doc.moveDown(0.3);
-      doc.fontSize(11).font('Helvetica').text(`Cadastro: ${dateStr}`, { align: 'center' });
-      doc.moveDown(0.3);
-      doc.fontSize(11).font('Helvetica').text(`Status: ${delivery.status === 'PENDING' ? 'PENDENTE' : 'RETIRADA'}`, { align: 'center' });
-      doc.moveDown(1);
+    }
+  }
 
-      // ── Linha separadora ──
-      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).lineWidth(1).stroke('#999999');
-      doc.moveDown(1);
-
-      // ── Código da encomenda ──
-      doc.fontSize(16).font('Helvetica-Bold').text(delivery.code, { align: 'center' });
-      doc.moveDown(0.8);
-
-      // ── QR Code centralizado ──
-      const qrSize = 220;
-      doc.image(qrBuffer, (doc.page.width - qrSize) / 2, doc.y, { width: qrSize, height: qrSize });
-
-      doc.end();
-    });
+  /** Desenha rodapé na posição Y fornecida */
+  private drawFooter(doc: any, pw: number, margin: number, usable: number, yPos: number) {
+    doc.fontSize(6).font('Helvetica').fillColor('#666666')
+      .text('Desenvolvido por LAVB Tecnologias', margin, yPos, { align: 'center', width: usable });
+    doc.fillColor('#000000');
   }
 
   /**
-   * Gera etiqueta para impressora térmica 80mm (~226 pontos de largura)
+   * Gera cupom para impressora térmica 80mm (~226 pontos de largura)
    */
   private async generateThermalLabel(delivery: any): Promise<Buffer> {
     const qrBuffer = await QRCode.toBuffer(delivery.code, { width: 160 });
     const unitLabel = delivery.unit.block
       ? `${delivery.unit.type} ${delivery.unit.number} - Bl ${delivery.unit.block}`
       : `${delivery.unit.type} ${delivery.unit.number}`;
-    const dateStr = delivery.createdAt.toLocaleString('pt-BR');
+    const dateStr = formatDateBR(delivery.createdAt);
     const pw = 226;
     const margin = 10;
     const usable = pw - margin * 2;
+    const pageH = 480;
+    const footerY = pageH - 18;
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({
-        size: [pw, 450],
-        margin,
-      });
+      const doc = new PDFDocument({ size: [pw, pageH], margin });
       const chunks: Buffer[] = [];
-
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // ── Título ──
-      doc.fontSize(13).font('Helvetica-Bold').text('ENCOMENDA', { align: 'center', width: usable });
+      // ── Logo / Cabeçalho ──
+      this.drawHeader(doc, pw, margin, usable);
+
+      // ── Separador ──
+      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).lineWidth(0.5).dash(2, { space: 2 }).stroke('#333333');
+      doc.undash().lineWidth(1);
       doc.moveDown(0.3);
 
-      // ── Separador ──
-      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).dash(2, { space: 2 }).stroke();
-      doc.undash();
-      doc.moveDown(0.4);
+      // ── Nome do morador (grande) ──
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000').text(delivery.user.name, { align: 'center', width: usable });
+      doc.moveDown(0.15);
 
-      // ── Dados do morador (centralizados) ──
-      doc.fontSize(10).font('Helvetica-Bold').text(delivery.user.name, { align: 'center', width: usable });
-      doc.moveDown(0.15);
-      doc.fontSize(9).font('Helvetica').text(unitLabel, { align: 'center', width: usable });
-      doc.moveDown(0.15);
-      doc.fontSize(8).font('Helvetica').text(`Loc: ${delivery.location.code}${delivery.location.description ? ' - ' + delivery.location.description : ''}`, { align: 'center', width: usable });
-      doc.moveDown(0.15);
-      doc.fontSize(7).font('Helvetica').text(dateStr, { align: 'center', width: usable });
-      doc.moveDown(0.4);
+      // ── Unidade (grande) ──
+      doc.fontSize(12).font('Helvetica-Bold').text(unitLabel, { align: 'center', width: usable });
+      doc.moveDown(0.25);
 
       // ── Separador ──
-      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).dash(2, { space: 2 }).stroke();
-      doc.undash();
-      doc.moveDown(0.4);
+      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).lineWidth(0.5).stroke('#999999');
+      doc.moveDown(0.35);
 
-      // ── Código ──
+      // ── Localização: código acima, descrição abaixo ──
+      doc.fontSize(11).font('Helvetica-Bold').text(delivery.location.code, { align: 'center', width: usable });
+      if (delivery.location.description) {
+        doc.fontSize(8).font('Helvetica').text(delivery.location.description, { align: 'center', width: usable });
+      }
+      doc.moveDown(0.25);
+
+      // ── Data de cadastro ──
+      doc.fontSize(7).font('Helvetica').fillColor('#555555').text(dateStr, { align: 'center', width: usable });
+      doc.fillColor('#000000');
+      doc.moveDown(0.35);
+
+      // ── Separador ──
+      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).lineWidth(0.5).dash(2, { space: 2 }).stroke('#333333');
+      doc.undash().lineWidth(1);
+      doc.moveDown(0.3);
+
+      // ── Código da encomenda ──
       doc.fontSize(9).font('Helvetica-Bold').text(delivery.code, { align: 'center', width: usable });
       doc.moveDown(0.3);
 
@@ -400,67 +404,144 @@ export class DeliveriesService {
       const qrSize = 140;
       doc.image(qrBuffer, (pw - qrSize) / 2, doc.y, { width: qrSize, height: qrSize });
 
+      // ── Rodapé ──
+      this.drawFooter(doc, pw, margin, usable, footerY);
+
       doc.end();
     });
   }
 
   /**
-   * Gera etiqueta adesiva estilo Mercado Livre (~100x150mm = 283x425 pontos)
+   * Gera etiqueta adesiva (~100x150mm = 283x425 pontos)
    */
   private async generateStickerLabel(delivery: any): Promise<Buffer> {
     const qrBuffer = await QRCode.toBuffer(delivery.code, { width: 240 });
     const unitLabel = delivery.unit.block
       ? `${delivery.unit.type} ${delivery.unit.number} - Bloco ${delivery.unit.block}`
       : `${delivery.unit.type} ${delivery.unit.number}`;
-    const dateStr = delivery.createdAt.toLocaleString('pt-BR');
+    const dateStr = formatDateBR(delivery.createdAt);
     const pw = 283; // ~100mm
     const ph = 425; // ~150mm
     const margin = 14;
     const usable = pw - margin * 2;
+    const footerY = ph - 20;
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({
-        size: [pw, ph],
-        margin,
-      });
+      const doc = new PDFDocument({ size: [pw, ph], margin });
       const chunks: Buffer[] = [];
-
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // ── Título ──
-      doc.fontSize(16).font('Helvetica-Bold').text('ENCOMENDA', { align: 'center', width: usable });
+      // ── Logo / Cabeçalho ──
+      this.drawHeader(doc, pw, margin, usable);
+
+      // ── Linha sólida ──
+      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).lineWidth(1).stroke('#333333');
+      doc.moveDown(0.4);
+
+      // ── Nome do morador (grande) ──
+      doc.fontSize(17).font('Helvetica-Bold').fillColor('#000000').text(delivery.user.name, { align: 'center', width: usable });
+      doc.moveDown(0.15);
+
+      // ── Unidade (grande) ──
+      doc.fontSize(14).font('Helvetica-Bold').text(unitLabel, { align: 'center', width: usable });
+      doc.moveDown(0.3);
+
+      // ── Linha sólida ──
+      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).lineWidth(1).stroke('#333333');
+      doc.moveDown(0.4);
+
+      // ── Localização: código acima, descrição abaixo ──
+      doc.fontSize(14).font('Helvetica-Bold').text(delivery.location.code, { align: 'center', width: usable });
+      if (delivery.location.description) {
+        doc.fontSize(9).font('Helvetica').text(delivery.location.description, { align: 'center', width: usable });
+      }
+      doc.moveDown(0.25);
+
+      // ── Data de cadastro ──
+      doc.fontSize(7).font('Helvetica').fillColor('#555555').text(dateStr, { align: 'center', width: usable });
+      doc.fillColor('#000000');
       doc.moveDown(0.4);
 
       // ── Linha sólida ──
       doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).lineWidth(1).stroke('#333333');
-      doc.moveDown(0.5);
-
-      // ── Dados do morador (centralizados) ──
-      doc.fontSize(13).font('Helvetica-Bold').text(delivery.user.name, { align: 'center', width: usable });
-      doc.moveDown(0.2);
-      doc.fontSize(11).font('Helvetica').text(unitLabel, { align: 'center', width: usable });
-      doc.moveDown(0.2);
-      doc.fontSize(9).font('Helvetica').text(`Localização: ${delivery.location.code}${delivery.location.description ? ' - ' + delivery.location.description : ''}`, { align: 'center', width: usable });
-      doc.moveDown(0.2);
-      doc.fontSize(8).font('Helvetica').text(dateStr, { align: 'center', width: usable });
-      doc.moveDown(0.5);
-
-      // ── Linha sólida ──
-      doc.moveTo(margin, doc.y).lineTo(pw - margin, doc.y).lineWidth(1).stroke('#333333');
-      doc.moveDown(0.5);
+      doc.moveDown(0.4);
 
       // ── Código da encomenda ──
       doc.fontSize(11).font('Helvetica-Bold').text(delivery.code, { align: 'center', width: usable });
-      doc.moveDown(0.4);
+      doc.moveDown(0.3);
 
       // ── QR Code centralizado ──
       const qrSize = 170;
       doc.image(qrBuffer, (pw - qrSize) / 2, doc.y, { width: qrSize, height: qrSize });
 
+      // ── Rodapé ──
+      this.drawFooter(doc, pw, margin, usable, footerY);
+
       doc.end();
     });
+  }
+
+  /**
+   * Marca encomenda como excluída (soft delete) e registra log de auditoria.
+   */
+  async deleteDelivery(id: string, tenantId: string, userId: string, role: string) {
+    const isAdmin = role === 'ADMIN';
+    const delivery = await this.prisma.delivery.findFirst({
+      where: { id, ...(isAdmin ? {} : { tenantId }), status: { not: 'DELETED' } },
+    });
+    if (!delivery) throw new NotFoundException('Encomenda não encontrada');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.deliveryEvent.create({
+        data: {
+          deliveryId: id,
+          userId,
+          type: 'DELETED_BY_ADMIN',
+          metadata: JSON.stringify({ role, deletedAt: new Date().toISOString(), previousStatus: delivery.status }),
+        },
+      });
+      await tx.delivery.update({ where: { id }, data: { status: 'DELETED' } });
+    });
+
+    return { message: 'Encomenda excluída com sucesso' };
+  }
+
+  /**
+   * Edita campos da encomenda e registra log de auditoria.
+   */
+  async updateDelivery(id: string, tenantId: string, data: { description?: string; locationId?: string }, userId: string, role: string) {
+    const isAdmin = role === 'ADMIN';
+    const delivery = await this.prisma.delivery.findFirst({
+      where: { id, ...(isAdmin ? {} : { tenantId }), status: { not: 'DELETED' } },
+    });
+    if (!delivery) throw new NotFoundException('Encomenda não encontrada');
+
+    const updated = await this.prisma.delivery.update({
+      where: { id },
+      data: {
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(data.locationId ? { locationId: data.locationId } : {}),
+      },
+      include: { user: true, unit: true, location: true },
+    });
+
+    await this.prisma.deliveryEvent.create({
+      data: {
+        deliveryId: id,
+        userId,
+        type: 'EDITED',
+        metadata: JSON.stringify({
+          role,
+          changes: data,
+          previousLocationId: delivery.locationId,
+          previousDescription: delivery.description,
+        }),
+      },
+    });
+
+    return updated;
   }
 
   async sendWhatsapp(id: string) {
@@ -643,7 +724,7 @@ export class DeliveriesService {
 
         await this.whatsappService.sendMessageWithToken(
           delivery.user.phone,
-          `✅ *Encomenda Retirada (Totem)*\n\nOlá ${delivery.user.name},\nSua encomenda (${delivery.code}) foi retirada via totem.${extraMsg}\n\nData: ${new Date().toLocaleString('pt-BR')}`,
+          `✅ *Encomenda Retirada (Totem)*\n\nOlá ${delivery.user.name},\nSua encomenda (${delivery.code}) foi retirada via totem.${extraMsg}\n\nData: ${formatDateBR(new Date())}`,
           whatsappToken,
         );
       } catch (error) {

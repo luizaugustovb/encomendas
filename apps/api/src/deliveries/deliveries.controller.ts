@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Body, Param, Res, Query,
-  UseGuards, UseInterceptors, UploadedFile,
+  UseGuards, UseInterceptors, UploadedFile, Delete, Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -131,7 +131,7 @@ export class DeliveriesController {
   @Roles('ADMIN', 'ADMIN_CONDOMINIO', 'PORTEIRO')
   async generateLabel(
     @Param('id') id: string,
-    @Query('format') format: 'a4' | 'thermal' | 'sticker' = 'a4',
+    @Query('format') format: 'thermal' | 'sticker' = 'thermal',
     @Res() res: Response,
   ) {
     const pdfBuffer = await this.deliveriesService.generateLabel(id, format);
@@ -141,6 +141,27 @@ export class DeliveriesController {
       'Content-Length': pdfBuffer.length,
     });
     res.end(pdfBuffer);
+  }
+
+  @Delete(':id')
+  @Roles('ADMIN', 'ADMIN_CONDOMINIO')
+  async deleteDelivery(
+    @Param('id') id: string,
+    @TenantId() tenantId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.deliveriesService.deleteDelivery(id, tenantId, user.sub, user.role);
+  }
+
+  @Patch(':id')
+  @Roles('ADMIN', 'ADMIN_CONDOMINIO')
+  async updateDelivery(
+    @Param('id') id: string,
+    @TenantId() tenantId: string,
+    @CurrentUser() user: any,
+    @Body() body: { description?: string; locationId?: string },
+  ) {
+    return this.deliveriesService.updateDelivery(id, tenantId, body, user.sub, user.role);
   }
 
   @Post(':id/whatsapp')

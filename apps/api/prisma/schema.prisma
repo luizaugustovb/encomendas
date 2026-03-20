@@ -155,6 +155,7 @@ enum Role {
 enum DeliveryStatus {
   PENDING
   WITHDRAWN
+  DELETED
 }
 
 enum EventType {
@@ -164,6 +165,8 @@ enum EventType {
   TOTEM_PHOTO_CAPTURED
   TOTEM_OTHER_RESIDENT
   DOOR_ACCESS
+  EDITED
+  DELETED_BY_ADMIN
 }
 
 model Equipment {
