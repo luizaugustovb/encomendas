@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Package, Plus, MessageCircle, QrCode, Camera, ImageIcon, Printer, Pencil, Trash2, Tag } from "lucide-react";
 
-/** Abre PDF e dispara diÃ¡logo de impressÃ£o nativo do SO */
+/** Abre PDF e dispara diálogo de impressão nativo do SO */
 function printPdfBlob(blob: Blob) {
   const url = URL.createObjectURL(blob);
   const iframe = document.createElement("iframe");
@@ -39,7 +39,7 @@ function printPdfBlob(blob: Blob) {
   };
 }
 
-/** Formata data no fuso de BrasÃ­lia */
+/** Formata data no fuso de Brasília */
 function formatDateBR(dateStr: string) {
   return new Date(dateStr).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
@@ -115,7 +115,7 @@ export default function DeliveriesPage() {
     e.preventDefault();
     if (!token) return;
     if (!formPhoto) {
-      addToast("Foto da encomenda Ã© obrigatÃ³ria", "error");
+      addToast("Foto da encomenda é obrigatória", "error");
       return;
     }
     try {
@@ -203,7 +203,7 @@ export default function DeliveriesPage() {
       await api.deleteDelivery(deleteId, token);
       setOpenDeleteConfirm(false);
       setDeleteId(null);
-      addToast("Encomenda excluÃ­da com sucesso!", "success");
+      addToast("Encomenda excluída com sucesso!", "success");
       loadData();
     } catch (err: any) {
       addToast(err.message || "Erro ao excluir encomenda", "error");
@@ -238,7 +238,7 @@ export default function DeliveriesPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Encomendas</h1>
-          <p className="text-muted-foreground text-sm">Gerencie as encomendas do condomÃ­nio</p>
+          <p className="text-muted-foreground text-sm">Gerencie as encomendas do condomínio</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           {/* Withdraw Dialog */}
@@ -252,11 +252,11 @@ export default function DeliveriesPage() {
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Retirar Encomenda</DialogTitle>
-                <DialogDescription>Insira o cÃ³digo da encomenda e selecione o morador</DialogDescription>
+                <DialogDescription>Insira o código da encomenda e selecione o morador</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleWithdraw} className="space-y-4">
                 <div className="space-y-2">
-                  <Label>CÃ³digo da Encomenda</Label>
+                  <Label>Código da Encomenda</Label>
                   <Input
                     placeholder="ENC-XXXXX-XXXX"
                     value={withdrawCode}
@@ -320,7 +320,7 @@ export default function DeliveriesPage() {
                   <Label>Morador *</Label>
                   <div className="relative">
                     <Input
-                      placeholder="Buscar por nome ou nÂº da unidade..."
+                      placeholder="Buscar por nome ou nº da unidade..."
                       value={userSearch}
                       onChange={(e) => { setUserSearch(e.target.value); setOpenUserDropdown(true); if (!e.target.value) setFormUserId(""); }}
                       onFocus={() => setOpenUserDropdown(true)}
@@ -350,10 +350,10 @@ export default function DeliveriesPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>LocalizaÃ§Ã£o *</Label>
+                  <Label>Localização *</Label>
                   <Select value={formLocationId} onValueChange={setFormLocationId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione a localizaÃ§Ã£o" />
+                      <SelectValue placeholder="Selecione a localização" />
                     </SelectTrigger>
                     <SelectContent>
                       {locations.map((l: any) => (
@@ -365,7 +365,7 @@ export default function DeliveriesPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>DescriÃ§Ã£o (opcional)</Label>
+                  <Label>Descrição (opcional)</Label>
                   <Input
                     placeholder="Ex: Caixa grande, Correios"
                     value={formDescription}
@@ -373,7 +373,7 @@ export default function DeliveriesPage() {
                   />
                 </div>
 
-                {/* Foto obrigatÃ³ria */}
+                {/* Foto obrigatória */}
                 <div className="space-y-3 pb-2">
                   <Label>
                     Foto da Encomenda <span className="text-destructive">*</span>
@@ -411,7 +411,7 @@ export default function DeliveriesPage() {
                     </div>
                   )}
                   {!formPhotoPreview && (
-                    <p className="text-xs text-destructive">Foto obrigatÃ³ria para cadastrar a encomenda</p>
+                    <p className="text-xs text-destructive">Foto obrigatória para cadastrar a encomenda</p>
                   )}
 
                   <input ref={photoCameraRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handlePhotoChange} />
@@ -432,17 +432,17 @@ export default function DeliveriesPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Editar Encomenda</DialogTitle>
-            <DialogDescription>Altere a descriÃ§Ã£o ou localizaÃ§Ã£o da encomenda</DialogDescription>
+            <DialogDescription>Altere a descrição ou localização da encomenda</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSave} className="space-y-4">
             <div className="space-y-2">
-              <Label>DescriÃ§Ã£o</Label>
-              <Input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} placeholder="DescriÃ§Ã£o opcional" />
+              <Label>Descrição</Label>
+              <Input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} placeholder="Descrição opcional" />
             </div>
             <div className="space-y-2">
-              <Label>LocalizaÃ§Ã£o</Label>
+              <Label>Localização</Label>
               <Select value={editLocationId} onValueChange={setEditLocationId}>
-                <SelectTrigger><SelectValue placeholder="Selecione a localizaÃ§Ã£o" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione a localização" /></SelectTrigger>
                 <SelectContent>
                   {locations.map((l: any) => (
                     <SelectItem key={l.id} value={l.id}>{l.code} - {l.description}</SelectItem>
@@ -463,7 +463,7 @@ export default function DeliveriesPage() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Excluir Encomenda</DialogTitle>
-            <DialogDescription>Esta aÃ§Ã£o nÃ£o pode ser desfeita. Deseja realmente excluir esta encomenda?</DialogDescription>
+            <DialogDescription>Esta ação não pode ser desfeita. Deseja realmente excluir esta encomenda?</DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 justify-end mt-4">
             <Button variant="outline" onClick={() => setOpenDeleteConfirm(false)}>Cancelar</Button>
@@ -522,14 +522,14 @@ export default function DeliveriesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>CÃ³digo</TableHead>
+                <TableHead>Código</TableHead>
                 <TableHead>Foto</TableHead>
                 <TableHead>Morador</TableHead>
                 <TableHead>Unidade</TableHead>
-                <TableHead>LocalizaÃ§Ã£o</TableHead>
+                <TableHead>Localização</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Data</TableHead>
-                <TableHead>AÃ§Ãµes</TableHead>
+                <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
